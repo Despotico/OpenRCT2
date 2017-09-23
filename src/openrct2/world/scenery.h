@@ -275,6 +275,10 @@ extern sint16 gSceneryShiftPressZOffset;
 extern sint16 gSceneryCtrlPressed;
 extern sint16 gSceneryCtrlPressZ;
 
+extern sint16 gSceneryAltPressed;
+extern sint16 gSceneryAltPressX;
+extern sint16 gSceneryAltPressY;
+
 extern uint8 gSceneryGroundFlags;
 
 extern const rct_xy8 ScenerySubTileOffsets[];

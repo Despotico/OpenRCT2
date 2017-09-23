@@ -61,6 +61,10 @@ sint16 gSceneryShiftPressZOffset;
 sint16 gSceneryCtrlPressed;
 sint16 gSceneryCtrlPressZ;
 
+sint16 gSceneryAltPressed;
+sint16 gSceneryAltPressX;
+sint16 gSceneryAltPressY;
+
 uint8 gSceneryGroundFlags;
 
 money32 gClearSceneryCost;

@@ -92,6 +92,8 @@ sint16 gMapSize;
 sint16 gMapSizeMaxXY;
 sint16 gMapBaseZ;
 
+sint16 gMapCtrlPressed;
+
 #if defined(NO_RCT2)
 rct_map_element gMapElements[MAX_TILE_MAP_ELEMENT_POINTERS * 3];
 rct_map_element *gMapElementTilePointers[MAX_TILE_MAP_ELEMENT_POINTERS];
@@ -1793,38 +1795,76 @@ static uint8 map_get_highest_land_height(sint32 xMin, sint32 xMax, sint32 yMin, 
     return max_height;
 }
 
+
+static sint32 map_correct_corners(sint32 corner)
+{
+    if (corner < 0)
+    {
+        corner = MAP_SELECT_TYPE_CORNER_3;
+    }
+    return corner;
+}
+
 static money32 raise_land(sint32 flags, sint32 x, sint32 y, sint32 z, sint32 ax, sint32 ay, sint32 bx, sint32 by, sint32 selectionType)
 {
     money32 cost = 0;
+    sint32  corners[2] = { MAP_SELECT_TYPE_EDGE_0, MAP_SELECT_TYPE_EDGE_0 };
 
-    if (selectionType < 0 || selectionType >= countof(map_element_raise_styles))
+    if (selectionType >= MAP_SELECT_TYPE_EDGE_0 && selectionType <= MAP_SELECT_TYPE_EDGE_3) 
+    {
+        sint32 diff = EDGE_TO_CORNERS_ROTATION_OFFSET;
+        //we need to transform edge - check double corner operations; diff cannot be explicit as define due to some optimalisations (different result)
+        //extract corners from edge:
+        corners[0] = map_correct_corners(selectionType - diff);
+        corners[1] = map_correct_corners(corners[0] - 1);
+    }
+    else
+    {
+        corners[0] = selectionType;
+    }
+
+    if (corners[0] < MAP_SELECT_TYPE_CORNER_0 || corners[0] > MAP_SELECT_TYPE_FULL ||
+        corners[0] >= countof(map_element_raise_styles))
     {
         log_warning("Invalid selection type %d for raising land", selectionType);
         return MONEY32_UNDEFINED;
     }
 
-    if ((flags & GAME_COMMAND_FLAG_APPLY) && gGameCommandNestLevel == 1) {
+    if ((flags & GAME_COMMAND_FLAG_APPLY) && gGameCommandNestLevel == 1) 
+    {
         audio_play_sound_at_location(SOUND_PLACE_ITEM, x, y, z);
     }
 
     uint8 min_height = map_get_lowest_land_height(ax, bx, ay, by);
 
-    for (sint32 yi = ay; yi <= by; yi += 32) {
-        for (sint32 xi = ax; xi <= bx; xi += 32) {
-            rct_map_element *map_element = map_get_surface_element_at(xi / 32, yi / 32);
-            if (map_element != NULL) {
-                uint8 height = map_element->base_height;
-                if (height <= min_height){
-                    uint8 newStyle = map_element_raise_styles[selectionType][map_element->properties.surface.slope & MAP_ELEMENT_SLOPE_MASK];
-                    if (newStyle & 0x20) { // needs to be raised
-                        height += 2;
-                        newStyle &= ~0x20;
+    for (uint8 cornerIndex = 0; cornerIndex < 2 &&
+        corners[cornerIndex] >= MAP_SELECT_TYPE_CORNER_0 &&
+        corners[cornerIndex] <= MAP_SELECT_TYPE_FULL;
+        cornerIndex++)
+    {
+        for (sint32 yi = ay; yi <= by; yi += 32) 
+        {
+            for (sint32 xi = ax; xi <= bx; xi += 32) 
+            {
+                rct_map_element *map_element = map_get_surface_element_at(xi / 32, yi / 32);
+                if (map_element != NULL) 
+                {
+                    uint8 height = map_element->base_height;
+                    if (height <= min_height)
+                    {
+                        uint8 newStyle = map_element_raise_styles[corners[cornerIndex]][map_element->properties.surface.slope & MAP_ELEMENT_SLOPE_MASK];
+                        if (newStyle & 0x20)
+                        { // needs to be raised
+                            height += 2;
+                            newStyle &= ~0x20;
+                        }
+                        money32 tileCost = map_set_land_height(flags, xi, yi, height, newStyle, corners[cornerIndex]);
+                        if (tileCost == MONEY32_UNDEFINED)
+                        {
+                            return MONEY32_UNDEFINED;
+                        }
+                        cost += tileCost;
                     }
-                    money32 tileCost = map_set_land_height(flags, xi, yi, height, newStyle, selectionType);
-                    if (tileCost == MONEY32_UNDEFINED)
-                        return MONEY32_UNDEFINED;
-
-                    cost += tileCost;
                 }
             }
         }
@@ -1843,40 +1883,72 @@ static money32 raise_land(sint32 flags, sint32 x, sint32 y, sint32 z, sint32 ax,
 static money32 lower_land(sint32 flags, sint32 x, sint32 y, sint32 z, sint32 ax, sint32 ay, sint32 bx, sint32 by, sint32 selectionType)
 {
     money32 cost = 0;
+    sint32  corners[2] = { MAP_SELECT_TYPE_EDGE_0, MAP_SELECT_TYPE_EDGE_0 };
 
-    if ((flags & GAME_COMMAND_FLAG_APPLY) && gGameCommandNestLevel == 1) {
-        audio_play_sound_at_location(SOUND_PLACE_ITEM, x, y, z);
+    if (selectionType >= MAP_SELECT_TYPE_EDGE_0 && selectionType <= MAP_SELECT_TYPE_EDGE_3) 
+    {
+        sint32 diff = EDGE_TO_CORNERS_ROTATION_OFFSET;
+        //we need to transform edge - check double corner operations; diff cannot be explicit as define due to some optimalisations (different result)
+        //extract corners from edge:
+        corners[0] = map_correct_corners(selectionType - diff);
+        corners[1] = map_correct_corners(corners[0] - 1);
+    }
+    else
+    {
+        corners[0] = selectionType;
     }
 
-    if (selectionType < 0 || selectionType >= 5)
+    if (corners[0] < MAP_SELECT_TYPE_CORNER_0 || corners[0] > MAP_SELECT_TYPE_FULL ||
+    corners[0] >= countof(map_element_raise_styles))
     {
-        log_warning("Improper selection type %d", selectionType);
+        log_warning("Invalid selection type %d for raising land", selectionType);
         return MONEY32_UNDEFINED;
+    }
+
+    if ((flags & GAME_COMMAND_FLAG_APPLY) && gGameCommandNestLevel == 1) 
+    {
+        audio_play_sound_at_location(SOUND_PLACE_ITEM, x, y, z);
     }
 
     uint8 max_height = map_get_highest_land_height(ax, bx, ay, by);
 
-    for (sint32 yi = ay; yi <= by; yi += 32) {
-        for (sint32 xi = ax; xi <= bx; xi += 32) {
-            rct_map_element *map_element = map_get_surface_element_at(xi / 32, yi / 32);
-            if (map_element != NULL) {
-                uint8 height = map_element->base_height;
-                if (map_element->properties.surface.slope & 0xF)
-                    height += 2;
-                if (map_element->properties.surface.slope & 0x10)
-                    height += 2;
-                if (height >= max_height) {
-                    height =  map_element->base_height;
-                    uint8 newStyle = map_element_lower_styles[selectionType][map_element->properties.surface.slope & MAP_ELEMENT_SLOPE_MASK];
-                    if (newStyle & 0x20) { // needs to be lowered
-                        height -= 2;
-                        newStyle &= ~0x20;
+    for (uint8 cornerIndex = 0; cornerIndex < 2 &&
+    corners[cornerIndex] >= MAP_SELECT_TYPE_CORNER_0 &&
+    corners[cornerIndex] <= MAP_SELECT_TYPE_FULL;
+    cornerIndex++)
+    {
+        for (sint32 yi = ay; yi <= by; yi += 32) 
+        {
+            for (sint32 xi = ax; xi <= bx; xi += 32) 
+            {
+                rct_map_element *map_element = map_get_surface_element_at(xi / 32, yi / 32);
+                if (map_element != NULL) 
+                {
+                    uint8 height = map_element->base_height;
+                    if (map_element->properties.surface.slope & 0xF)
+                    {
+                        height += 2;
                     }
-                    money32 tileCost = map_set_land_height(flags, xi, yi, height, newStyle, selectionType);
-                    if (tileCost == MONEY32_UNDEFINED)
+                    if (map_element->properties.surface.slope & 0x10)
+                    {
+                        height += 2;
+                    }
+                    if (height >= max_height)
+                    {
+                        height = map_element->base_height;
+                        uint8 newStyle = map_element_lower_styles[corners[cornerIndex]][map_element->properties.surface.slope & MAP_ELEMENT_SLOPE_MASK];
+                        if (newStyle & 0x20) 
+                        { // needs to be lowered
+                            height -= 2;
+                            newStyle &= ~0x20;
+                        }
+                        money32 tileCost = map_set_land_height(flags, xi, yi, height, newStyle, corners[cornerIndex]);
+                        if (tileCost == MONEY32_UNDEFINED)
+                        {
                         return MONEY32_UNDEFINED;
-
-                    cost += tileCost;
+                        }
+                        cost += tileCost;
+                    }
                 }
             }
         }
@@ -2308,7 +2380,7 @@ static money32 smooth_land(sint32 flags, sint32 centreX, sint32 centreY, sint32 
     sint32 mapLeftRight = mapLeft | (mapRight << 16);
     sint32 mapTopBottom = mapTop | (mapBottom << 16);
     bool fullTile = ((command & 0x7FFF) == MAP_SELECT_TYPE_FULL);
-
+	
     // Play sound (only once)
     if ((flags & GAME_COMMAND_FLAG_APPLY) && gGameCommandNestLevel == 1) {
         audio_play_sound_at_location(SOUND_PLACE_ITEM, centreX, centreY, centreZ);
@@ -2343,38 +2415,17 @@ static money32 smooth_land(sint32 flags, sint32 centreX, sint32 centreY, sint32 
         minHeight = map_get_lowest_land_height(mapLeft, mapRight, mapTop, mapBottom);
         maxHeight = map_get_highest_land_height(mapLeft, mapRight, mapTop, mapBottom);
 
-        if (commandType == GAME_COMMAND_RAISE_LAND) {
+        if (commandType == GAME_COMMAND_RAISE_LAND)
+        {
             minHeight += 2;
             maxHeight += 2;
         }
-        else {
+        else
+        {
             maxHeight -= 2;
             minHeight -= 2;
         }
-    }
-    else
-    {
-        // One corner tile selected
-        newBaseZ = mapElement->base_height;
-        newSlope = mapElement->properties.surface.slope & MAP_ELEMENT_SLOPE_MASK;
-        if (commandType == GAME_COMMAND_RAISE_LAND) {
-            newSlope = map_element_raise_styles[command & 0xFF][newSlope];
-            if (newSlope & 0x20) {
-                newBaseZ += 2;
-                newSlope &= ~0x20;
-            }
-        }
-        else {
-            newSlope = map_element_lower_styles[command & 0xFF][newSlope];
-            if (newSlope & 0x20) {
-                newBaseZ -= 2;
-                newSlope &= ~0x20;
-            }
-        }
-    }
 
-    // Then do the smoothing
-    if (fullTile) {
         // Smooth the corners
         sint32 z = clamp(minHeight, map_element_get_corner_height(mapElement, 2), maxHeight);
         totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, -32, 0, 2, raiseLand);
@@ -2425,57 +2476,106 @@ static money32 smooth_land(sint32 flags, sint32 centreX, sint32 centreY, sint32 
     }
     else
     {
-        // One corner tile selected
-        // Smooth the corners
-        sint32 z = map_get_corner_height(newBaseZ, newSlope, 2);
-        totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, -32, 0, 2, raiseLand);
-        z = map_get_corner_height(newBaseZ, newSlope, 0);
-        totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 32, 32, 2, 0, raiseLand);
-        z = map_get_corner_height(newBaseZ, newSlope, 3);
-        totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, 32, 1, 3, raiseLand);
-        z = map_get_corner_height(newBaseZ, newSlope, 1);
-        totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 32, -32, 3, 1, raiseLand);
+        sint32 commands[2] = { MAP_SELECT_TYPE_EDGE_0, MAP_SELECT_TYPE_EDGE_0 };
+        sint32 originalCommand = command;
+        sint32 selectionType = command & 0x7FFF;
+        // Edge OR corner is selected
+        if (selectionType >= MAP_SELECT_TYPE_EDGE_0 && selectionType <= MAP_SELECT_TYPE_EDGE_3)
+        {
+            sint32 diff = EDGE_TO_CORNERS_ROTATION_OFFSET;
 
-        // Smooth the edges
-        switch (command & 0x7FFF) {
-        case MAP_SELECT_TYPE_CORNER_0:
-            z = map_get_corner_height(newBaseZ, newSlope, 0);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 32, 0, 3, 0, raiseLand);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, 32, 1, 0, raiseLand);
-            z = map_get_corner_height(newBaseZ, newSlope, 3);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, 0, 0, 3, raiseLand);
-            z = map_get_corner_height(newBaseZ, newSlope, 1);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, -32, 0, 1, raiseLand);
-            break;
-        case MAP_SELECT_TYPE_CORNER_1:
-            z = map_get_corner_height(newBaseZ, newSlope, 1);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 32, 0, 2, 1, raiseLand);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, -32, 0, 1, raiseLand);
-            z = map_get_corner_height(newBaseZ, newSlope, 2);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, 0, 1, 2, raiseLand);
-            z = map_get_corner_height(newBaseZ, newSlope, 0);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, 32, 1, 0, raiseLand);
-            break;
-        case MAP_SELECT_TYPE_CORNER_2:
-            z = map_get_corner_height(newBaseZ, newSlope, 2);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, 0, 1, 2, raiseLand);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, -32, 3, 2, raiseLand);
-            z = map_get_corner_height(newBaseZ, newSlope, 1);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 32, 0, 2, 1, raiseLand);
-            z = map_get_corner_height(newBaseZ, newSlope, 3);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, 32, 2, 3, raiseLand);
-            break;
-        case MAP_SELECT_TYPE_CORNER_3:
-            z = map_get_corner_height(newBaseZ, newSlope, 3);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, 0, 0, 3, raiseLand);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, 32, 2, 3, raiseLand);
-            z = map_get_corner_height(newBaseZ, newSlope, 0);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 32, 0, 3, 0, raiseLand);
-            z = map_get_corner_height(newBaseZ, newSlope, 2);
-            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, -32, 3, 2, raiseLand);
-            break;
+            //we need to transform edge - check double corner operations; diff cannot be explicit as define due to some optimalisations (different result)
+            //extract corners from edge:
+            commands[0] = map_correct_corners((command & 0x7FFF) - diff);
+            commands[1] = map_correct_corners(commands[0] - 1);
         }
+        else
+        {
+            commands[0] = selectionType;
+        }
+
+        for (uint8 commandIndex = 0; commandIndex < 2 &&
+        commands[commandIndex] >= MAP_SELECT_TYPE_CORNER_0 &&
+        commands[commandIndex] <= MAP_SELECT_TYPE_FULL;
+        commandIndex++)
+        {
+            // One corner tile selected
+            newBaseZ = mapElement->base_height;
+            newSlope = mapElement->properties.surface.slope & MAP_ELEMENT_SLOPE_MASK;
+            if (commandType == GAME_COMMAND_RAISE_LAND)
+            {
+                newSlope = map_element_raise_styles[commands[commandIndex] & 0xFF][newSlope];
+                if (newSlope & 0x20)
+                {
+                    newBaseZ += 2;
+                    newSlope &= ~0x20;
+                }
+            }
+            else 
+            {
+                newSlope = map_element_lower_styles[commands[commandIndex] & 0xFF][newSlope];
+                if (newSlope & 0x20) 
+                {
+                    newBaseZ -= 2;
+                    newSlope &= ~0x20;
+                }
+            }
+
+            // One corner tile selected
+            // Smooth the corners
+            sint32 z = map_get_corner_height(newBaseZ, newSlope, 2);
+            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, -32, 0, 2, raiseLand);
+            z = map_get_corner_height(newBaseZ, newSlope, 0);
+            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 32, 32, 2, 0, raiseLand);
+            z = map_get_corner_height(newBaseZ, newSlope, 3);
+            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, 32, 1, 3, raiseLand);
+            z = map_get_corner_height(newBaseZ, newSlope, 1);
+            totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 32, -32, 3, 1, raiseLand);
+
+            // Smooth the edges
+            switch (commands[commandIndex] & 0x7FFF) 
+            {
+                case MAP_SELECT_TYPE_CORNER_0:
+                    z = map_get_corner_height(newBaseZ, newSlope, 0);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 32, 0, 3, 0, raiseLand);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, 32, 1, 0, raiseLand);
+                    z = map_get_corner_height(newBaseZ, newSlope, 3);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, 0, 0, 3, raiseLand);
+                    z = map_get_corner_height(newBaseZ, newSlope, 1);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, -32, 0, 1, raiseLand);
+                break;
+                case MAP_SELECT_TYPE_CORNER_1:
+                    z = map_get_corner_height(newBaseZ, newSlope, 1);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 32, 0, 2, 1, raiseLand);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, -32, 0, 1, raiseLand);
+                    z = map_get_corner_height(newBaseZ, newSlope, 2);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, 0, 1, 2, raiseLand);
+                    z = map_get_corner_height(newBaseZ, newSlope, 0);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, 32, 1, 0, raiseLand);
+                break;
+                case MAP_SELECT_TYPE_CORNER_2:
+                    z = map_get_corner_height(newBaseZ, newSlope, 2);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, 0, 1, 2, raiseLand);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, -32, 3, 2, raiseLand);
+                    z = map_get_corner_height(newBaseZ, newSlope, 1);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 32, 0, 2, 1, raiseLand);
+                    z = map_get_corner_height(newBaseZ, newSlope, 3);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, 32, 2, 3, raiseLand);
+                break;
+                case MAP_SELECT_TYPE_CORNER_3:
+                    z = map_get_corner_height(newBaseZ, newSlope, 3);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, -32, 0, 0, 3, raiseLand);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, 32, 2, 3, raiseLand);
+                    z = map_get_corner_height(newBaseZ, newSlope, 0);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 32, 0, 3, 0, raiseLand);
+                    z = map_get_corner_height(newBaseZ, newSlope, 2);
+                    totalCost += smooth_land_row_by_corner(flags, mapLeft, mapTop, z, 0, -32, 3, 2, raiseLand);
+                break;
+            }
+        }
+        command = originalCommand;
     }
+
 
     // Finally raise / lower the centre tile
     result = game_do_command(centreX, flags, centreY, mapLeftRight, commandType, command & 0x7FFF, mapTopBottom);
