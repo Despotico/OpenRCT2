@@ -468,7 +468,8 @@ void window_scenery_open()
     window->scenery.selected_scenery_id = -1;
     window->scenery.hover_counter = 0;
     window_push_others_below(window);
-    gSceneryGhostType = 0;
+    //gSceneryGhostType = 0;
+    gSceneryLastIndex = 1;
     gSceneryPlaceCost = MONEY32_UNDEFINED;
     gSceneryPlaceRotation = 0;
     gWindowSceneryPaintEnabled = 0; // repaint coloured scenery tool state
@@ -487,7 +488,7 @@ void window_scenery_open()
  */
 void window_scenery_close(rct_window *w)
 {
-    scenery_remove_ghost_tool_placement();
+    scenery_remove_ghost_tool_placement(false);
     hide_gridlines();
     viewport_set_visibility(0);
 
@@ -556,7 +557,7 @@ static void window_scenery_mouseup(rct_window *w, rct_widgetindex widgetIndex)
     case WIDX_SCENERY_ROTATE_OBJECTS_BUTTON:
         gWindowSceneryRotation++;
         gWindowSceneryRotation = gWindowSceneryRotation % 4;
-        scenery_remove_ghost_tool_placement();
+        scenery_remove_ghost_tool_placement(false);
         window_invalidate(w);
         break;
     case WIDX_SCENERY_REPAINT_SCENERY_BUTTON:

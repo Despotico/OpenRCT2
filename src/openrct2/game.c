@@ -521,7 +521,7 @@ sint32 game_do_command_p(sint32 command, sint32 *eax, sint32 *ebx, sint32 *ecx, 
         command == GAME_COMMAND_PLACE_LARGE_SCENERY ||
         command == GAME_COMMAND_PLACE_BANNER ||
         command == GAME_COMMAND_PLACE_PATH)) {
-        scenery_remove_ghost_tool_placement();
+        scenery_remove_ghost_tool_placement(false);
     }
 
     if (game_command_playerid == -1) {

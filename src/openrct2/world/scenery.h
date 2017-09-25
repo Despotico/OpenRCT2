@@ -32,6 +32,8 @@
 #define SCENERY_PATH_SCENERY_ID_MIN  0x100
 #define SCENERY_PATH_SCENERY_ID_MAX  0x10F
 
+#define SCENERY_GHOST_LIST_SIZE      0xFF 
+
 #pragma pack(push, 1)
 typedef struct rct_small_scenery_entry {
     uint32 flags;           // 0x06
@@ -126,6 +128,16 @@ typedef struct rct_large_scenery_entry {
 #ifdef PLATFORM_32BIT
 assert_struct_size(rct_large_scenery_entry, 20);
 #endif
+
+typedef struct rct_scenery_ghosts_list{
+    rct_map_element *element;
+    uint8 element_type;
+    uint8 type;
+    rct_xyz16 position;
+    uint32 path_type;
+    uint8 rotation;
+    bool placable;
+}scenery_ghosts_list;
 
 typedef enum {
     LARGE_SCENERY_FLAG_HAS_PRIMARY_COLOUR = (1 << 0),   // 0x1
@@ -253,7 +265,7 @@ extern colour_t gWindowSceneryTertiaryColour;
 extern bool gWindowSceneryEyedropperEnabled;
 
 extern rct_map_element *gSceneryMapElement;
-extern uint8 gSceneryMapElementType;
+//extern uint8 gSceneryMapElementType;
 
 extern money32 gSceneryPlaceCost;
 extern sint16 gSceneryPlaceObject;
@@ -262,10 +274,13 @@ extern uint8 gSceneryPlacePathType;
 extern uint8 gSceneryPlacePathSlope;
 extern uint8 gSceneryPlaceRotation;
 
-extern uint8 gSceneryGhostType;
+extern scenery_ghosts_list gSceneryGhost[];
+extern uint16 gSceneryLastIndex;
+/*extern uint8 gSceneryGhostType;
 extern rct_xyz16 gSceneryGhostPosition;
+extern rct_xy16 gSceneryGhostPositionB;
 extern uint32 gSceneryGhostPathObjectType;
-extern uint8 gSceneryGhostWallRotation;
+extern uint8 gSceneryGhostWallRotation;*/
 
 extern sint16 gSceneryShiftPressed;
 extern sint16 gSceneryShiftPressX;
@@ -278,6 +293,7 @@ extern sint16 gSceneryCtrlPressZ;
 extern sint16 gSceneryAltPressed;
 extern sint16 gSceneryAltPressX;
 extern sint16 gSceneryAltPressY;
+extern uint8 gSceneryAltRotation;
 
 extern uint8 gSceneryGroundFlags;
 
@@ -291,7 +307,7 @@ void init_scenery();
 void scenery_update_tile(sint32 x, sint32 y);
 void scenery_update_age(sint32 x, sint32 y, rct_map_element *mapElement);
 void scenery_set_default_placement_configuration();
-void scenery_remove_ghost_tool_placement();
+void scenery_remove_ghost_tool_placement(bool placable);
 bool window_scenery_set_selected_item(sint32 sceneryId);
 
 rct_scenery_entry *get_small_scenery_entry(sint32 entryIndex);
