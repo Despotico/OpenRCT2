@@ -248,6 +248,17 @@ enum {
     SCENERY_TYPE_BANNER
 };
 
+typedef enum {
+    SCENERY_KEY_ACTION_NONE,
+    SCENERY_KEY_ACTION_KEEP_HEIGHT,
+    SCENERY_KEY_ACTION_RAISE_HEIGHT,
+    SCENERY_KEY_ACTION_RAISE_AT_SELECTED,
+    SCENERY_KEY_ACTION_DRAG,
+    SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT,
+    SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,
+    SCENERY_KEY_ACTION_DRAG_APPEND_KEEP_HEIGHT
+}scenery_key_action;
+
 #define SCENERY_ENTRIES_BY_TAB 256
 
 #ifdef __cplusplus
@@ -293,6 +304,7 @@ extern sint16 gSceneryCtrlPressZ;
 extern sint16 gSceneryAltPressed;
 extern sint16 gSceneryAltPressX;
 extern sint16 gSceneryAltPressY;
+extern sint16 gSceneryAltPressZ;
 extern uint8 gSceneryAltRotation;
 
 extern uint8 gSceneryGroundFlags;

@@ -62,6 +62,7 @@ sint16 gSceneryCtrlPressZ;
 sint16 gSceneryAltPressed;
 sint16 gSceneryAltPressX;
 sint16 gSceneryAltPressY;
+sint16 gSceneryAltPressZ;
 uint8  gSceneryAltRotation;
 
 uint8 gSceneryGroundFlags;

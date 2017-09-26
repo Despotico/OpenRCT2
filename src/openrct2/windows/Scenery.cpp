@@ -465,6 +465,7 @@ void window_scenery_open()
     gWindowSceneryRotation = 3;
     gSceneryCtrlPressed = false;
     gSceneryShiftPressed = false;
+    gSceneryAltPressed = false;
     window->scenery.selected_scenery_id = -1;
     window->scenery.hover_counter = 0;
     window_push_others_below(window);

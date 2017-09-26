@@ -1116,17 +1116,153 @@ static void scenery_eyedropper_tool_down(sint16 x, sint16 y, rct_widgetindex wid
  * edx : parameter_2
  * edi : parameter_3
  */
-static void window_top_toolbar_scenery_get_tile_params(sint16 x, sint16 y, uint16 selected_scenery, sint16* grid_x, sint16* grid_y, uint32* parameter_1, uint32* parameter_2, uint32* parameter_3){
+
+/*
+static void w_t_t_s_keep_height(sint16 x, sint16 y, uint16 selected_scenery, scenery_key_action key_action)
+{
+
+}*/
+
+static void window_top_toolbar_scenery_process_keypad(sint16 x, sint16 y, uint16 selected_scenery, scenery_key_action * key_action) {
+    //--------------------------------------------------------------
+    // When we press keys in one state we want a trigger to happend 
+    // and state machine to keep that state. Doing this with if else
+    // with 2 buttons is ok. With 3 buttons is doable but hard af for
+    // debugging. Instead use a special array for this task
+    //--------------------------------------------------------------
+    typedef enum {
+        F,
+        T,
+        A
+    }window_top_toolbar_state;
+    struct special_key_reaction
+    {
+        window_top_toolbar_state ctrl_pressed;
+        window_top_toolbar_state shift_pressed;
+        window_top_toolbar_state alt_pressed;
+        window_top_toolbar_state past_ctr;
+        window_top_toolbar_state past_shift;
+        window_top_toolbar_state past_alt;
+        scenery_key_action result_state;
+        void(*trigger[3])(sint16 x, sint16 y, uint16 selected_scenery, scenery_key_action key_action);
+    };
+
+    struct special_key_reaction skey_tab[] =
+    { //C SH ALT prv: C SH ALT,  STATE,                                  Trigger ; undefined result in SCENERY_KEY_ACTION_NONE
+      { F, F, F,      A, A, A, SCENERY_KEY_ACTION_NONE,                nullptr },//keep height
+      { T, F, F,      A, A, A, SCENERY_KEY_ACTION_KEEP_HEIGHT,         nullptr },//keep height
+      { F, T, F,      A, A, A, SCENERY_KEY_ACTION_RAISE_HEIGHT,        nullptr },//raise by shift
+      { T, T, F,      A, A, A, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,   nullptr },//raise by shift at position
+
+      { F, F, T,      F, A, A, SCENERY_KEY_ACTION_DRAG,                nullptr },//drag
+      { F, T, T,      A, A, A, SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT,  nullptr },//drag during shift press (up down)
+
+      { T, F, T,      T, A, F, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,    nullptr },//drag after ctrl press
+      { T, F, T,      F, A, T, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,    nullptr },//ctrl during drag
+      { T, F, T,      F, A, F, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,    nullptr },//at the same time
+      { T, F, T,      T, F, T, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,    nullptr },//at the same time
+
+      { T, T, T,      A, A, A, SCENERY_KEY_ACTION_NONE,                 nullptr },//tbd, raise lower drag at position selected by either ctrl or alt inital press
+    };
+
     rct_window* w = window_find_by_class(WC_SCENERY);
 
     if (w == nullptr) {
-        *grid_x = MAP_LOCATION_NULL;
+        if (key_action) {
+            *key_action = SCENERY_KEY_ACTION_NONE;
+        }
+        return;
+    }
+    if (!key_action) {
         return;
     }
 
+    window_top_toolbar_state alt_pressed=F;
+    window_top_toolbar_state alt_was_pressed=F;
+
+    window_top_toolbar_state ctrl_pressed=F;
+    window_top_toolbar_state ctrl_was_pressed=F;
+
+    window_top_toolbar_state shift_pressed = F;
+    window_top_toolbar_state shift_was_pressed = F;
+
+    if (input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_COPY_Z)) ctrl_pressed = T;
+    if (input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_SHIFT_Z)) shift_pressed = T;
+    if (input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_DRAG)) alt_pressed = T;
+
+    if (gSceneryCtrlPressed) ctrl_was_pressed = T;
+    if (gSceneryShiftPressed) shift_was_pressed = T;
+    if (gSceneryAltPressed) alt_was_pressed = T;
+    
+    scenery_key_action new_state=SCENERY_KEY_ACTION_NONE;
+
+    //detect state changed (different keys are pressed now)
+    if (alt_pressed != alt_was_pressed || ctrl_pressed != ctrl_was_pressed || shift_pressed != shift_was_pressed) {
+        uint8 index = 0;
+        //state was changed, detect actions on change now
+        for (uint8 i = 0; i <= sizeof(skey_tab) / sizeof(skey_tab[0]); i++) {
+            if (skey_tab[i].ctrl_pressed == ctrl_pressed &&
+                skey_tab[i].alt_pressed == alt_pressed &&
+                skey_tab[i].shift_pressed == shift_pressed &&
+                (skey_tab[i].past_ctr == A || skey_tab[i].past_ctr == ctrl_was_pressed) &&
+                (skey_tab[i].past_alt == A || skey_tab[i].past_alt == alt_was_pressed) &&
+                (skey_tab[i].past_shift == A || skey_tab[i].past_shift == shift_was_pressed))
+            {
+                index = i+1;
+                break;
+            }
+        }
+        if (!index) {
+            new_state = SCENERY_KEY_ACTION_NONE;
+            return;
+        }
+        else {
+            index = index - 1;
+            new_state = skey_tab[index].result_state;
+            if (skey_tab[index].trigger) {
+                for (uint8 i = 0; i < 3; i++) {
+                    if (skey_tab[index].trigger[i]) {
+                        skey_tab[index].trigger[i](x, y, selected_scenery, *key_action);
+                    }
+                }
+                if (ctrl_was_pressed == T) {
+                    gSceneryCtrlPressed = true;
+                }
+                else {
+                    gSceneryCtrlPressed = false;
+                }
+                if (shift_was_pressed == T) {
+                    gSceneryShiftPressed = true;
+                }
+                else {
+                    gSceneryShiftPressed = false;
+                }
+                if (alt_was_pressed == T) {
+                    gSceneryAltPressed = true;
+                }
+                else {
+                    gSceneryAltPressed = false;
+                }
+            }
+        }
+    }
+    //set old state
+    return;
+    /*
     uint8 scenery_type = selected_scenery >> 8;
     bool can_raise_item = false;
+    scenery_key_action remebered_key_action = SCENERY_KEY_ACTION_NONE;
+    rct_map_element* map_element;
+    uint16 flags =
+        VIEWPORT_INTERACTION_MASK_TERRAIN &
+        VIEWPORT_INTERACTION_MASK_RIDE &
+        VIEWPORT_INTERACTION_MASK_SCENERY &
+        VIEWPORT_INTERACTION_MASK_FOOTPATH &
+        VIEWPORT_INTERACTION_MASK_WALL &
+        VIEWPORT_INTERACTION_MASK_LARGE_SCENERY;
+    sint32 interaction_type;
 
+    can_raise_item = false;
     if (scenery_type == SCENERY_TYPE_SMALL) {
         rct_scenery_entry* scenery_entry = get_small_scenery_entry(selected_scenery);
 
@@ -1137,116 +1273,314 @@ static void window_top_toolbar_scenery_get_tile_params(sint16 x, sint16 y, uint1
     else if (scenery_type == SCENERY_TYPE_WALL || scenery_type == SCENERY_TYPE_LARGE) {
         can_raise_item = true;
     }
-
-    if (!can_raise_item && !gCheatsDisableSupportLimits) {
+    //move check to other function
+    if (!(can_raise_item) && !gCheatsDisableSupportLimits) {
         gSceneryCtrlPressed = false;
         gSceneryShiftPressed = false;
-        gSceneryAltPressed = false;
+        *key_action = SCENERY_KEY_ACTION_NONE;
     }
     else {
         if (!gSceneryCtrlPressed) {
             if (input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_COPY_Z)) {
-                // CTRL pressed
-                rct_map_element* map_element;
-                uint16 flags =
-                    VIEWPORT_INTERACTION_MASK_TERRAIN &
-                    VIEWPORT_INTERACTION_MASK_RIDE &
-                    VIEWPORT_INTERACTION_MASK_SCENERY &
-                    VIEWPORT_INTERACTION_MASK_FOOTPATH &
-                    VIEWPORT_INTERACTION_MASK_WALL &
-                    VIEWPORT_INTERACTION_MASK_LARGE_SCENERY;
-                sint32 interaction_type;
-                get_map_coordinates_from_pos(x, y, flags, nullptr, nullptr, &interaction_type, &map_element, nullptr);
+                //If ctrl is pressed and during that press we press alt we want to keep ctrl point instead of alt point
+                if (!input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_DRAG)) {
+                    // CTRL pressed first time and not during drag
+                    get_map_coordinates_from_pos(x, y, flags, nullptr, nullptr, &interaction_type, &map_element, nullptr);
 
-                if (interaction_type != VIEWPORT_INTERACTION_ITEM_NONE) {
-                    gSceneryCtrlPressed = true;
-                    gSceneryCtrlPressZ = map_element->base_height * 8;
+                    if (interaction_type != VIEWPORT_INTERACTION_ITEM_NONE) {
+                        uint8 cl = 0;
+                        gSceneryCtrlPressed = true;
+                        gSceneryCtrlPressZ = map_element->base_height * 8;
+                        *key_action = SCENERY_KEY_ACTION_KEEP_HEIGHT;
+                    
+                        screen_get_map_xy(x, y, &gSceneryAltPressX, &gSceneryAltPressY, nullptr);
+                        if (gSceneryGhost[0].type) {
+                            gSceneryAltRotation = gSceneryGhost[0].rotation;
+                        }
+                        else {
+                            if ((selected_scenery >> 8) == SCENERY_TYPE_SMALL)
+                                screen_get_map_xy_quadrant(x, y, &gSceneryAltPressX, &gSceneryAltPressY, &cl);
+                            else if ((selected_scenery >> 8) == SCENERY_TYPE_WALL)
+                                screen_get_map_xy_side(x, y, &gSceneryAltPressX, &gSceneryAltPressY, &cl);
+                            gSceneryAltRotation = cl & 0xFF;
+                        }
+                    }
+                }
+                else
+                {
+                    *key_action = SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT;
                 }
             }
         }
         else {
+            *key_action = SCENERY_KEY_ACTION_KEEP_HEIGHT;
             if (!(input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_COPY_Z))) {
                 // CTRL not pressed
+                *key_action = SCENERY_KEY_ACTION_NONE;
                 gSceneryCtrlPressed = false;
             }
         }
-
+        remebered_key_action = *key_action;
         if (!gSceneryShiftPressed) {
             if (input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_SHIFT_Z)) {
-                // SHIFT pressed
+                // SHIFT pressed first time
                 gSceneryShiftPressed = true;
                 gSceneryShiftPressX = x;
                 gSceneryShiftPressY = y;
                 gSceneryShiftPressZOffset = 0;
+                *key_action = SCENERY_KEY_ACTION_RAISE_HEIGHT;
             }
         }
         else {
             if (input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_SHIFT_Z)) {
-                // SHIFT pressed
+                // SHIFT keeps being pressed
                 gSceneryShiftPressZOffset = (gSceneryShiftPressY - y + 4) & 0xFFF8;
-
-                x = gSceneryShiftPressX;
-                y = gSceneryShiftPressY;
+                *key_action = SCENERY_KEY_ACTION_RAISE_HEIGHT;
+                if(gSceneryCtrlPressed)
+                    *key_action = SCENERY_KEY_ACTION_RAISE_AT_SELECTED;
             }
             else {
+                *key_action = SCENERY_KEY_ACTION_NONE;
                 // SHIFT not pressed
                 gSceneryShiftPressed = false;
             }
         }
     }
+    //restore if shift added no changes
+    if (*key_action == SCENERY_KEY_ACTION_NONE)
+    {
+        *key_action = remebered_key_action;
+    }
+    remebered_key_action = *key_action;
+    //alt press:
+    // if shift is in freedrag mode - we try to append at raised position, starting from one above
+    // if ctrl was pressed - we try to append at selected height
+    // otherwise drag on normal position
+    if (!gSceneryAltPressed) {
+        if (input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_DRAG)) {
+            uint8 cl = 0;
+            gSceneryAltPressed = true;
+            if (input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_COPY_Z)) {
+                //ctrl was pressed before drag - use ctrl height and rest of the data
+                *key_action = SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT;
+                //gSceneryAltPressZ = gSceneryCtrlPressZ;
+            }
+            else {
+                //ctrl is not pressed, we have just pressed alt
+                //firstly save this point so we know dragging starting box
+                screen_get_map_xy(x, y, &gSceneryAltPressX, &gSceneryAltPressY, nullptr);
+                get_map_coordinates_from_pos(x, y, flags, nullptr, nullptr, &interaction_type, &map_element, nullptr);
+                if (interaction_type != VIEWPORT_INTERACTION_ITEM_NONE) {
+                    gSceneryAltPressZ = map_element->base_height * 8;
+                }
+                else
+                {
+                    gSceneryAltPressZ = 0;
+                }
+                if (gSceneryGhost[0].type) {
+                    gSceneryAltRotation = gSceneryGhost[0].rotation;
+                }
+                else {
+                    if ((selected_scenery >> 8) == SCENERY_TYPE_SMALL)
+                        screen_get_map_xy_quadrant(x, y, &gSceneryAltPressX, &gSceneryAltPressY, &cl);
+                    else if ((selected_scenery >> 8) == SCENERY_TYPE_WALL)
+                        screen_get_map_xy_side(x, y, &gSceneryAltPressX, &gSceneryAltPressY, &cl);
+                    gSceneryAltRotation = cl & 0xFF;
+                }
+                *key_action = SCENERY_KEY_ACTION_DRAG;
+                //now test if other keys were pressed and act accordingly
+                if (can_raise_item && input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_SHIFT_Z)) {
+                    *key_action = SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT;
+                }
+                gSceneryCtrlPressZ = gSceneryAltPressZ;
+            }
+            
+        }
+    }
+    else {
+        // Alt is being pressed        
+        if (!gSceneryCtrlPressed && input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_COPY_Z)) {
+            //we pressed ctrl during drag - keep alt height
+            gSceneryCtrlPressZ = gSceneryAltPressZ;
+            *key_action = SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT;
+        }
+        if (can_raise_item && input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_SHIFT_Z)) {
+            //we pressed shift during drag - keep alt height
+            gSceneryCtrlPressZ = gSceneryAltPressZ;
+            *key_action = SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT;
+        }
+        if (!input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_DRAG)) {
+            // ALT not pressed
+            gSceneryAltPressed = false;
+            *key_action = SCENERY_KEY_ACTION_NONE;
+            //scenery_remove_ghost_tool_placement(false);
+        }
+    }
+    //Restore if no changes after alt
+    if (*key_action == SCENERY_KEY_ACTION_NONE)
+    {
+        *key_action = remebered_key_action;
+    }
+    */
+}
 
+static void window_top_toolbar_scenery_get_tile_params (
+    sint16 x,
+    sint16 y,
+    uint16 selected_scenery,
+    sint16* grid_x,
+    sint16* grid_y, 
+    scenery_key_action key_action,
+    uint32* parameter_1,
+    uint32* parameter_2,
+    uint32* parameter_3
+    ) {
+    rct_window* w = window_find_by_class(WC_SCENERY);
+    if (w == nullptr) {
+        *grid_x = MAP_LOCATION_NULL;
+        return;
+    }
+
+    uint8 scenery_type = selected_scenery >> 8;
+        
     switch (scenery_type) {
     case SCENERY_TYPE_SMALL:
     {
-        // Small scenery
         rct_scenery_entry* scenery = get_small_scenery_entry(selected_scenery);
         if (!(scenery->small_scenery.flags & SMALL_SCENERY_FLAG_FULL_TILE)) {
             uint8 cl = 0;
-
-            // If CTRL not pressed
-            if (!gSceneryCtrlPressed) {
-                screen_get_map_xy_quadrant(x, y, grid_x, grid_y, &cl);
-
-                if (*grid_x == MAP_LOCATION_NULL)
-                    return;
-
-                gSceneryPlaceZ = 0;
-
-                // If SHIFT pressed
-                if (gSceneryShiftPressed) {
+            sint16 z = 0;
+            switch (key_action) {
+                case SCENERY_KEY_ACTION_NONE:
+                case SCENERY_KEY_ACTION_DRAG:
+                    screen_get_map_xy_quadrant(x, y, grid_x, grid_y, &cl);
+                    if (*grid_x == MAP_LOCATION_NULL)
+                        return;
+                    gSceneryPlaceZ = 0;
+                    break;                
+                case SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT:
+                case SCENERY_KEY_ACTION_KEEP_HEIGHT:
+                    z = gSceneryCtrlPressZ;
+                    screen_get_map_xy_quadrant_with_z(x, y, z, grid_x, grid_y, &cl);
+                    z = Math::Max<sint16>(z, 16);
+                    gSceneryPlaceZ = z;
+                    break;
+                case SCENERY_KEY_ACTION_RAISE_HEIGHT:
+                case SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT:
+                {
+                    x = gSceneryShiftPressX;
+                    y = gSceneryShiftPressY;
+                    screen_get_map_xy_quadrant(x, y, grid_x, grid_y, &cl);
+                    if (*grid_x == MAP_LOCATION_NULL)
+                        return;
                     rct_map_element* map_element = map_get_surface_element_at(*grid_x / 32, *grid_y / 32);
-
                     if (map_element == nullptr) {
                         *grid_x = MAP_LOCATION_NULL;
                         return;
                     }
-
-                    sint16 z = (map_element->base_height * 8) & 0xFFF0;
+                    z = (map_element->base_height * 8) & 0xFFF0;
                     z += gSceneryShiftPressZOffset;
-
                     z = Math::Max<sint16>(z, 16);
-
                     gSceneryPlaceZ = z;
+                    break;
                 }
-            }
-            else {
-                sint16 z = gSceneryCtrlPressZ;
-
-                screen_get_map_xy_quadrant_with_z(x, y, z, grid_x, grid_y, &cl);
-
-                // If SHIFT pressed
-                if (gSceneryShiftPressed) {
+                case SCENERY_KEY_ACTION_RAISE_AT_SELECTED:
+                    x = gSceneryShiftPressX;
+                    y = gSceneryShiftPressY;
+                    z = gSceneryCtrlPressZ;
+                    screen_get_map_xy_quadrant_with_z(x, y, z, grid_x, grid_y, &cl);
                     z += gSceneryShiftPressZOffset;
-                }
-
-                z = Math::Max<sint16>(z, 16);
-
-                gSceneryPlaceZ = z;
+                    z = Math::Max<sint16>(z, 16);
+                    gSceneryPlaceZ = z;
+                    break;
+                default: //not supported
+                        return;
             }
+            if (*grid_x == MAP_LOCATION_NULL)
+                return;
+            uint8 rotation = gWindowSceneryRotation;
+            if (!(scenery->small_scenery.flags & SMALL_SCENERY_FLAG_ROTATABLE)) {
+                rotation = util_rand() & 0xFF;
+            }
+            rotation -= get_current_rotation();
+            rotation &= 0x3;
+            // Also places it in lower but think thats for clobbering
+            *parameter_1 = (selected_scenery & 0xFF) << 8;
+            *parameter_2 = (cl ^ (1 << 1)) | (gWindowSceneryPrimaryColour << 8);
+            *parameter_3 = rotation | (gWindowScenerySecondaryColour << 16);
+            return;
+        }
+        else {
+            uint16 flags =
+                VIEWPORT_INTERACTION_MASK_TERRAIN &
+                VIEWPORT_INTERACTION_MASK_WATER;
+            sint32 interaction_type = 0;
+            rct_map_element* map_element;
+            uint16 water_height = 0;
+            sint16 z = 0;
+            switch (key_action) {
+                case SCENERY_KEY_ACTION_NONE:
+                case SCENERY_KEY_ACTION_DRAG:
+                    get_map_coordinates_from_pos(x, y, flags, grid_x, grid_y, &interaction_type, &map_element, nullptr);
+                    if (interaction_type == VIEWPORT_INTERACTION_ITEM_NONE) {
+                        *grid_x = MAP_LOCATION_NULL;
+                        return;
+                    }
+                    gSceneryPlaceZ = 0;
+                    water_height = map_element->properties.surface.terrain & MAP_ELEMENT_WATER_HEIGHT_MASK;
+                    if (water_height != 0) {
+                        gSceneryPlaceZ = water_height * 16;
+                    }
+                    break;
+                case SCENERY_KEY_ACTION_KEEP_HEIGHT:
+                case SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT:
+                    z = gSceneryCtrlPressZ; 
+                    screen_get_map_xy_with_z(x, y, z, grid_x, grid_y);
+                    z = Math::Max<sint16>(z, 16);
+                    gSceneryPlaceZ = z;
+                    break;
+                case SCENERY_KEY_ACTION_RAISE_HEIGHT:
+                case SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT:
+                    x = gSceneryShiftPressX;
+                    y = gSceneryShiftPressY;
+                    get_map_coordinates_from_pos(x, y, flags, grid_x, grid_y, &interaction_type, &map_element, nullptr);
 
+                    if (interaction_type == VIEWPORT_INTERACTION_ITEM_NONE) {
+                        *grid_x = MAP_LOCATION_NULL;
+                        return;
+                    }
+                    gSceneryPlaceZ = 0;
+                    water_height = map_element->properties.surface.terrain & MAP_ELEMENT_WATER_HEIGHT_MASK;
+                    if (water_height != 0) {
+                        gSceneryPlaceZ = water_height * 16;
+                    }
+                    map_element = map_get_surface_element_at(*grid_x / 32, *grid_y / 32);
+                    if (map_element == nullptr) {
+                        *grid_x = MAP_LOCATION_NULL;
+                        return;
+                    }
+                    z = (map_element->base_height * 8) & 0xFFF0;
+                    z += gSceneryShiftPressZOffset;
+                    z = Math::Max<sint16>(z, 16);
+                    gSceneryPlaceZ = z;
+                    break;
+                case SCENERY_KEY_ACTION_RAISE_AT_SELECTED:
+                    x = gSceneryShiftPressX;
+                    y = gSceneryShiftPressY;
+                    z = gSceneryCtrlPressZ;
+                    screen_get_map_xy_with_z(x, y, z, grid_x, grid_y);
+                    z += gSceneryShiftPressZOffset;
+                    z = Math::Max<sint16>(z, 16);
+                    gSceneryPlaceZ = z;
+                    break;
+                default:
+                    return;
+            }
             if (*grid_x == MAP_LOCATION_NULL)
                 return;
 
+            *grid_x &= 0xFFE0;
+            *grid_y &= 0xFFE0;
             uint8 rotation = gWindowSceneryRotation;
 
             if (!(scenery->small_scenery.flags & SMALL_SCENERY_FLAG_ROTATABLE)) {
@@ -1258,86 +1592,13 @@ static void window_top_toolbar_scenery_get_tile_params(sint16 x, sint16 y, uint1
 
             // Also places it in lower but think thats for clobbering
             *parameter_1 = (selected_scenery & 0xFF) << 8;
-            *parameter_2 = (cl ^ (1 << 1)) | (gWindowSceneryPrimaryColour << 8);
+            *parameter_2 = 0 | (gWindowSceneryPrimaryColour << 8);
             *parameter_3 = rotation | (gWindowScenerySecondaryColour << 16);
             return;
         }
-
-        // If CTRL not pressed
-        if (!gSceneryCtrlPressed) {
-            uint16 flags =
-                VIEWPORT_INTERACTION_MASK_TERRAIN &
-                VIEWPORT_INTERACTION_MASK_WATER;
-            sint32 interaction_type = 0;
-            rct_map_element* map_element;
-
-            get_map_coordinates_from_pos(x, y, flags, grid_x, grid_y, &interaction_type, &map_element, nullptr);
-
-            if (interaction_type == VIEWPORT_INTERACTION_ITEM_NONE) {
-                *grid_x = MAP_LOCATION_NULL;
-                return;
-            }
-
-            gSceneryPlaceZ = 0;
-            uint16 water_height = map_element->properties.surface.terrain & MAP_ELEMENT_WATER_HEIGHT_MASK;
-            if (water_height != 0) {
-                gSceneryPlaceZ = water_height * 16;
-            }
-
-            // If SHIFT pressed
-            if (gSceneryShiftPressed) {
-                map_element = map_get_surface_element_at(*grid_x / 32, *grid_y / 32);
-
-                if (map_element == nullptr) {
-                    *grid_x = MAP_LOCATION_NULL;
-                    return;
-                }
-
-                sint16 z = (map_element->base_height * 8) & 0xFFF0;
-                z += gSceneryShiftPressZOffset;
-
-                z = Math::Max<sint16>(z, 16);
-
-                gSceneryPlaceZ = z;
-            }
-        }
-        else {
-            sint16 z = gSceneryCtrlPressZ;
-            screen_get_map_xy_with_z(x, y, z, grid_x, grid_y);
-
-            // If SHIFT pressed
-            if (gSceneryShiftPressed) {
-                z += gSceneryShiftPressZOffset;
-            }
-
-            z = Math::Max<sint16>(z, 16);
-
-            gSceneryPlaceZ = z;
-        }
-
-        if (*grid_x == MAP_LOCATION_NULL)
-            return;
-
-        *grid_x &= 0xFFE0;
-        *grid_y &= 0xFFE0;
-        uint8 rotation = gWindowSceneryRotation;
-
-        if (!(scenery->small_scenery.flags & SMALL_SCENERY_FLAG_ROTATABLE)) {
-            rotation = util_rand() & 0xFF;
-        }
-
-        rotation -= get_current_rotation();
-        rotation &= 0x3;
-
-        // Also places it in lower but think thats for clobbering
-        *parameter_1 = (selected_scenery & 0xFF) << 8;
-        *parameter_2 = 0 | (gWindowSceneryPrimaryColour << 8);
-        *parameter_3 = rotation | (gWindowScenerySecondaryColour << 16);
-        break;
     }
     case SCENERY_TYPE_PATH_ITEM:
     {
-        // Path bits
         uint16 flags =
             VIEWPORT_INTERACTION_MASK_FOOTPATH &
             VIEWPORT_INTERACTION_MASK_FOOTPATH_ITEM;
@@ -1345,65 +1606,68 @@ static void window_top_toolbar_scenery_get_tile_params(sint16 x, sint16 y, uint1
         rct_map_element* map_element;
 
         get_map_coordinates_from_pos(x, y, flags, grid_x, grid_y, &interaction_type, &map_element, nullptr);
-
         if (interaction_type == VIEWPORT_INTERACTION_ITEM_NONE) {
             *grid_x = MAP_LOCATION_NULL;
             return;
         }
-
         *parameter_1 = 0 | ((map_element->properties.path.type & 0x7) << 8);
         *parameter_2 = map_element->base_height | ((map_element->properties.path.type >> 4) << 8);
         if (map_element->type & 1) {
             *parameter_2 |= MAP_LOCATION_NULL;
         }
         *parameter_3 = (selected_scenery & 0xFF) + 1;
-        break;
+        return;
     }
     case SCENERY_TYPE_WALL:
     {
-        // Walls
-        uint8 cl;
-        // If CTRL not pressed
-        if (!gSceneryCtrlPressed) {
-            screen_get_map_xy_side(x, y, grid_x, grid_y, &cl);
-
-            if (*grid_x == MAP_LOCATION_NULL)
-                return;
-
-            gSceneryPlaceZ = 0;
-
-            // If SHIFT pressed
-            if (gSceneryShiftPressed) {
+        uint8 cl=0;
+        sint16 z = 0;
+        switch (key_action) {
+            case SCENERY_KEY_ACTION_NONE:
+            case SCENERY_KEY_ACTION_DRAG:
+                screen_get_map_xy_side(x, y, grid_x, grid_y, &cl);
+                if (*grid_x == MAP_LOCATION_NULL)
+                    return;
+                gSceneryPlaceZ = 0;
+                break;
+            case SCENERY_KEY_ACTION_KEEP_HEIGHT:
+            case SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT:
+                z = gSceneryCtrlPressZ;
+                screen_get_map_xy_side_with_z(x, y, z, grid_x, grid_y, &cl);
+                z = Math::Max<sint16>(z, 16);
+                gSceneryPlaceZ = z;
+                break;
+            case SCENERY_KEY_ACTION_RAISE_HEIGHT:
+            case SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT:
+            {
+                x = gSceneryShiftPressX;
+                y = gSceneryShiftPressY;
+                screen_get_map_xy_side(x, y, grid_x, grid_y, &cl);
+                if (*grid_x == MAP_LOCATION_NULL)
+                    return;
                 rct_map_element* map_element = map_get_surface_element_at(*grid_x / 32, *grid_y / 32);
-
                 if (map_element == nullptr) {
                     *grid_x = MAP_LOCATION_NULL;
                     return;
                 }
-
-                sint16 z = (map_element->base_height * 8) & 0xFFF0;
+                z = (map_element->base_height * 8) & 0xFFF0;
                 z += gSceneryShiftPressZOffset;
-
                 z = Math::Max<sint16>(z, 16);
-
                 gSceneryPlaceZ = z;
+                break;
             }
-        }
-        else {
-            sint16 z = gSceneryCtrlPressZ;
-            screen_get_map_xy_side_with_z(x, y, z, grid_x, grid_y, &cl);
-
-            // If SHIFT pressed
-            if (gSceneryShiftPressed) {
+            case SCENERY_KEY_ACTION_RAISE_AT_SELECTED:
+                x = gSceneryShiftPressX;
+                y = gSceneryShiftPressY;
+                z = gSceneryCtrlPressZ;
+                screen_get_map_xy_side_with_z(x, y, z, grid_x, grid_y, &cl);
                 z += gSceneryShiftPressZOffset;
-            }
-
-            z = Math::Max<sint16>(z, 16);
-
-            gSceneryPlaceZ = z;
+                z = Math::Max<sint16>(z, 16);
+                gSceneryPlaceZ = z;
+                break;
+            default:
+                break;
         }
-
-
         if (*grid_x == MAP_LOCATION_NULL)
             return;
 
@@ -1412,51 +1676,58 @@ static void window_top_toolbar_scenery_get_tile_params(sint16 x, sint16 y, uint1
         *parameter_1 = (selected_scenery & 0xFF) << 8;
         *parameter_2 = cl | (gWindowSceneryPrimaryColour << 8);
         *parameter_3 = 0;
+        
         break;
     }
     case SCENERY_TYPE_LARGE:
     {
-        // Large scenery
-        // If CTRL not pressed
-        if (!gSceneryCtrlPressed) {
-            sub_68A15E(x, y, grid_x, grid_y, nullptr, nullptr);
-
-            if (*grid_x == MAP_LOCATION_NULL)
-                return;
-
-            gSceneryPlaceZ = 0;
-
-            // If SHIFT pressed
-            if (gSceneryShiftPressed) {
+        sint16 z = 0;
+        switch (key_action) {
+            case SCENERY_KEY_ACTION_NONE:
+            case SCENERY_KEY_ACTION_DRAG:
+                sub_68A15E(x, y, grid_x, grid_y, nullptr, nullptr);
+                if (*grid_x == MAP_LOCATION_NULL)
+                    return;
+                gSceneryPlaceZ = 0;
+                break;
+            case SCENERY_KEY_ACTION_KEEP_HEIGHT:
+            case SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT:
+                z = gSceneryCtrlPressZ;
+                screen_get_map_xy_with_z(x, y, z, grid_x, grid_y);
+                z = Math::Max<sint16>(z, 16);
+                gSceneryPlaceZ = z;
+                break;            
+            case SCENERY_KEY_ACTION_RAISE_HEIGHT:
+            case SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT:
+            {
+                x = gSceneryShiftPressX;
+                y = gSceneryShiftPressY;
+                sub_68A15E(x, y, grid_x, grid_y, nullptr, nullptr);
+                if (*grid_x == MAP_LOCATION_NULL)
+                    return;
                 rct_map_element* map_element = map_get_surface_element_at(*grid_x / 32, *grid_y / 32);
-
                 if (map_element == nullptr) {
                     *grid_x = MAP_LOCATION_NULL;
                     return;
                 }
-
-                sint16 z = (map_element->base_height * 8) & 0xFFF0;
+                z = (map_element->base_height * 8) & 0xFFF0;
                 z += gSceneryShiftPressZOffset;
-
                 z = Math::Max<sint16>(z, 16);
-
                 gSceneryPlaceZ = z;
+                break;
             }
-        }
-        else {
-            sint16 z = gSceneryCtrlPressZ;
-            screen_get_map_xy_with_z(x, y, z, grid_x, grid_y);
-
-            // If SHIFT pressed
-            if (gSceneryShiftPressed) {
+            case SCENERY_KEY_ACTION_RAISE_AT_SELECTED:
+                x = gSceneryShiftPressX;
+                y = gSceneryShiftPressY;
+                z = gSceneryCtrlPressZ;
+                screen_get_map_xy_with_z(x, y, z, grid_x, grid_y);
                 z += gSceneryShiftPressZOffset;
-            }
-
-            z = Math::Max<sint16>(z, 16);
-
-            gSceneryPlaceZ = z;
+                z = Math::Max<sint16>(z, 16);
+                gSceneryPlaceZ = z;
+                break;
+            default:
+                break;
         }
-
         if (*grid_x == MAP_LOCATION_NULL)
             return;
 
@@ -1474,7 +1745,6 @@ static void window_top_toolbar_scenery_get_tile_params(sint16 x, sint16 y, uint1
     }
     case SCENERY_TYPE_BANNER:
     {
-        // Banner
         uint16 flags =
             VIEWPORT_INTERACTION_MASK_FOOTPATH &
             VIEWPORT_INTERACTION_MASK_FOOTPATH_ITEM;
@@ -1482,33 +1752,28 @@ static void window_top_toolbar_scenery_get_tile_params(sint16 x, sint16 y, uint1
         rct_map_element* map_element;
 
         get_map_coordinates_from_pos(x, y, flags, grid_x, grid_y, &interaction_type, &map_element, nullptr);
-
         if (interaction_type == VIEWPORT_INTERACTION_ITEM_NONE) {
             *grid_x = MAP_LOCATION_NULL;
             return;
         }
-
         uint8 rotation = gWindowSceneryRotation;
         rotation -= get_current_rotation();
         rotation &= 0x3;
-
         sint16 z = map_element->base_height;
-
         if (map_element->properties.path.type & (1 << 2)) {
             if (rotation != ((map_element->properties.path.type & 3) ^ 2)) {
                 z += 2;
             }
         }
-
         z /= 2;
-
         // Also places it in lower but think thats for clobbering
         *parameter_1 = (selected_scenery & 0xFF) << 8;
         *parameter_2 = z | (rotation << 8);
         *parameter_3 = gWindowSceneryPrimaryColour;
-        break;
+        return;
     }
   }
+  return;
 }
 
 void game_command_callback_place_banner(sint32 eax, sint32 ebx, sint32 ecx, sint32 edx, sint32 esi, sint32 edi, sint32 ebp)
@@ -1540,13 +1805,17 @@ static void window_top_toolbar_scenery_tool_down(sint16 x, sint16 y, rct_window 
 
     sint32 selectedTab = gWindowSceneryTabSelections[gWindowSceneryActiveTabIndex];
     uint8 sceneryType = (selectedTab & 0xFF00) >> 8;
+    scenery_key_action key_action = SCENERY_KEY_ACTION_NONE;
 
     if (selectedTab == -1) return;
 
     sint16 gridX, gridY;
     uint32 parameter_1, parameter_2, parameter_3;
 
-    window_top_toolbar_scenery_get_tile_params(x, y, selectedTab, &gridX, &gridY, &parameter_1, &parameter_2, &parameter_3);
+    window_top_toolbar_scenery_process_keypad(x, y, selectedTab, &key_action);
+    window_top_toolbar_scenery_get_tile_params(x, y, selectedTab, &gridX, &gridY, key_action, &parameter_1, &parameter_2, &parameter_3);
+    if(key_action < SCENERY_KEY_ACTION_DRAG)
+        scenery_remove_ghost_tool_placement(false);
 
     if (gridX == MAP_LOCATION_NULL) return;
 
@@ -2451,7 +2720,23 @@ static money32 try_place_ghost_scenery(rct_xy16 map_tile, rct_xy16 map_tile2, ui
 *
 *  rct2: 0x006E287B
 */
+//----------------------------------------------------------------------------
+// General refactor concept allowing multiple ghost scenery elements:
+// 1. Firstly calculate switches basing on user input so we know how to
+// format the area and how big it should be.
+// 2. Proceed the shape to obtain the list of points with x and y coords we 
+// need to check
+// 3. due to the fact that all object needs independent height 
+// calculation, proceed the height of element
+// 4. Try to insert the ghost due to height rules in choosen points
+// 5. Update only if general settings or last point (mouseover) have changed
+// 6. If clicked attempt to insert all elements based on list of ghosts
+// 7. DO not change the rules made during ghost placement, as it might
+// lead to desync in mp game
+//-----------------------------------------------------------------------------
 static void top_toolbar_tool_update_scenery(sint16 x, sint16 y){
+
+    //invalidate all old markings, we are proceeding from scratch
     map_invalidate_selection_rect();
     map_invalidate_map_selection_tiles();
 
@@ -2470,14 +2755,14 @@ static void top_toolbar_tool_update_scenery(sint16 x, sint16 y){
         return;
     }
 
-    
-
     uint8 scenery_type = (selected_tab & 0xFF00) >> 8;
     uint8 selected_scenery = selected_tab & 0xFF;
     rct_xy16 mapTile = { 0 };
     uint32 parameter1, parameter2, parameter3;
+    scenery_key_action key_action = SCENERY_KEY_ACTION_NONE;
 
-    window_top_toolbar_scenery_get_tile_params(x, y, selected_tab, &mapTile.x, &mapTile.y, &parameter1, &parameter2, &parameter3);
+    window_top_toolbar_scenery_process_keypad(x, y, selected_tab, &key_action);
+    window_top_toolbar_scenery_get_tile_params(x, y, selected_tab, &mapTile.x, &mapTile.y, key_action, &parameter1, &parameter2, &parameter3);
 
     if (mapTile.x == MAP_LOCATION_NULL) {
         scenery_remove_ghost_tool_placement(false);
@@ -2487,28 +2772,7 @@ static void top_toolbar_tool_update_scenery(sint16 x, sint16 y){
         gSceneryLastIndex = 1;
     }
 
-    if (!gSceneryAltPressed) {
-        if (input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_DRAG)) {
-            // ALT pressed: save original starting point
-            gSceneryAltPressed = true;
-            //screen_get_map_xy(x, y, &gSceneryAltPressX, &gSceneryAltPressY, nullptr);
-            gSceneryAltPressX = mapTile.x;
-            gSceneryAltPressY = mapTile.y;
-            if (gSceneryGhost[0].type) {
-                gSceneryAltRotation = gSceneryGhost[0].rotation;
-            }
-            else {
-                gSceneryAltRotation = (parameter2 & 0xFF);
-            }
-        }
-    }
-    else {
-        // ALT not pressed
-        if (!input_test_place_object_modifier(PLACE_OBJECT_MODIFIER_DRAG)) {
-            gSceneryAltPressed = false;
-            scenery_remove_ghost_tool_placement(false);
-        }
-    }
+    
    
 
     rct_scenery_entry* scenery;
