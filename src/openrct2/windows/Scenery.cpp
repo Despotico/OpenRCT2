@@ -463,9 +463,11 @@ void window_scenery_open()
     window_scenery_update_scroll(window);
     show_gridlines();
     gWindowSceneryRotation = 3;
-    gSceneryCtrlPressed = false;
-    gSceneryShiftPressed = false;
-    gSceneryAltPressed = false;
+    gSceneryCtrl.pressed = false;
+    gSceneryShift.pressed = false;
+    gSceneryDrag.pressed = false;
+    gSceneryCannotDisplay = false;
+    gScenerySetHeight = 0;
     window->scenery.selected_scenery_id = -1;
     window->scenery.hover_counter = 0;
     window_push_others_below(window);

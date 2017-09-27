@@ -221,6 +221,31 @@ typedef struct rct_scenery_set_entry {
 assert_struct_size(rct_scenery_set_entry, 14 + 2 * 0x80);
 #pragma pack(pop)
 
+
+//Key runtime data
+typedef struct
+{
+    bool pressed;
+    sint16 x;
+    sint16 y;
+    sint16 offset;
+}scenery_key_shift;
+
+typedef struct
+{
+    bool pressed;
+    sint16 z;
+}scenery_key_ctrl;
+
+typedef struct
+{
+    bool pressed;
+    sint16 x;
+    sint16 y;
+    sint16 z;
+    sint16 rotation;
+}scenery_key_drag;
+
 enum {
     PATH_BIT_FLAG_IS_BIN                    = 1 << 0,
     PATH_BIT_FLAG_IS_BENCH                  = 1 << 1,
@@ -259,6 +284,13 @@ typedef enum {
     SCENERY_KEY_ACTION_DRAG_APPEND_KEEP_HEIGHT
 }scenery_key_action;
 
+typedef enum {
+    SCENERY_SHAPE_POINT,
+    SCENERY_SHAPE_LINE,
+    SCENERY_SHAPE_RECT,
+    SCENERY_SHAPE_HOLLOW
+} scenery_key_shape;
+
 #define SCENERY_ENTRIES_BY_TAB 256
 
 #ifdef __cplusplus
@@ -284,28 +316,17 @@ extern sint16 gSceneryPlaceZ;
 extern uint8 gSceneryPlacePathType;
 extern uint8 gSceneryPlacePathSlope;
 extern uint8 gSceneryPlaceRotation;
+extern scenery_key_shape gSceneryShape;
+extern bool gSceneryCannotDisplay;
 
 extern scenery_ghosts_list gSceneryGhost[];
 extern uint16 gSceneryLastIndex;
-/*extern uint8 gSceneryGhostType;
-extern rct_xyz16 gSceneryGhostPosition;
-extern rct_xy16 gSceneryGhostPositionB;
-extern uint32 gSceneryGhostPathObjectType;
-extern uint8 gSceneryGhostWallRotation;*/
 
-extern sint16 gSceneryShiftPressed;
-extern sint16 gSceneryShiftPressX;
-extern sint16 gSceneryShiftPressY;
-extern sint16 gSceneryShiftPressZOffset;
+extern scenery_key_shift gSceneryShift;
+extern scenery_key_ctrl gSceneryCtrl;
+extern scenery_key_drag gSceneryDrag;
 
-extern sint16 gSceneryCtrlPressed;
-extern sint16 gSceneryCtrlPressZ;
-
-extern sint16 gSceneryAltPressed;
-extern sint16 gSceneryAltPressX;
-extern sint16 gSceneryAltPressY;
-extern sint16 gSceneryAltPressZ;
-extern uint8 gSceneryAltRotation;
+extern sint16 gScenerySetHeight;
 
 extern uint8 gSceneryGroundFlags;
 

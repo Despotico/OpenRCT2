@@ -42,28 +42,23 @@ rct_map_element *gSceneryMapElement;
 //uint8 gSceneryMapElementType;
 
 money32 gSceneryPlaceCost;
+scenery_key_shape gSceneryShape;
 sint16 gSceneryPlaceObject;
 sint16 gSceneryPlaceZ;
 uint8 gSceneryPlacePathType;
 uint8 gSceneryPlacePathSlope;
 uint8 gSceneryPlaceRotation;
+bool gSceneryCannotDisplay;
 
 scenery_ghosts_list gSceneryGhost[SCENERY_GHOST_LIST_SIZE];
 uint16 gSceneryLastIndex;
 
-sint16 gSceneryShiftPressed;
-sint16 gSceneryShiftPressX;
-sint16 gSceneryShiftPressY;
-sint16 gSceneryShiftPressZOffset;
+scenery_key_shift gSceneryShift;
+scenery_key_ctrl gSceneryCtrl;
+scenery_key_drag gSceneryDrag;
 
-sint16 gSceneryCtrlPressed;
-sint16 gSceneryCtrlPressZ;
+sint16 gScenerySetHeight;
 
-sint16 gSceneryAltPressed;
-sint16 gSceneryAltPressX;
-sint16 gSceneryAltPressY;
-sint16 gSceneryAltPressZ;
-uint8  gSceneryAltRotation;
 
 uint8 gSceneryGroundFlags;
 
