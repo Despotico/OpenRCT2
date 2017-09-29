@@ -129,15 +129,26 @@ typedef struct rct_large_scenery_entry {
 assert_struct_size(rct_large_scenery_entry, 20);
 #endif
 
-typedef struct rct_scenery_ghosts_list{
+typedef struct {
     rct_map_element *element;
     uint8 element_type;
     uint8 type;
-    rct_xyz16 position;
+    rct_xyz16 position; //includes z as map element height
+    sint16 placing_height; //placing z
     uint32 path_type;
     uint8 rotation;
+    uint8 orientation;
     bool placable;
 }scenery_ghosts_list;
+
+typedef struct  {
+    rct_xyz16 posA;
+    rct_xyz16 posB;
+    uint16 selected_tab;
+    uint32 parameter_1;
+    uint32 parameter_2;
+    uint32 parameter_3;
+}scenery_ghosts_last;
 
 typedef enum {
     LARGE_SCENERY_FLAG_HAS_PRIMARY_COLOUR = (1 << 0),   // 0x1
@@ -311,15 +322,16 @@ extern rct_map_element *gSceneryMapElement;
 //extern uint8 gSceneryMapElementType;
 
 extern money32 gSceneryPlaceCost;
-extern sint16 gSceneryPlaceObject;
+//extern sint16 gSceneryPlaceObject;
 extern sint16 gSceneryPlaceZ;
 extern uint8 gSceneryPlacePathType;
 extern uint8 gSceneryPlacePathSlope;
-extern uint8 gSceneryPlaceRotation;
+//extern uint8 gSceneryPlaceRotation;
 extern scenery_key_shape gSceneryShape;
 extern bool gSceneryCannotDisplay;
 
 extern scenery_ghosts_list gSceneryGhost[];
+extern scenery_ghosts_last gSceneryLastGhost;
 extern uint16 gSceneryLastIndex;
 
 extern scenery_key_shift gSceneryShift;

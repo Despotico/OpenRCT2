@@ -474,7 +474,7 @@ void window_scenery_open()
     //gSceneryGhostType = 0;
     gSceneryLastIndex = 1;
     gSceneryPlaceCost = MONEY32_UNDEFINED;
-    gSceneryPlaceRotation = 0;
+    //gSceneryPlaceRotation = 0;
     gWindowSceneryPaintEnabled = 0; // repaint coloured scenery tool state
     gWindowSceneryEyedropperEnabled = false;
     gWindowSceneryClusterEnabled = 0; // build cluster tool state

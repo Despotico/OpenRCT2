@@ -41,27 +41,28 @@ bool gWindowSceneryEyedropperEnabled;
 rct_map_element *gSceneryMapElement;
 //uint8 gSceneryMapElementType;
 
+//various
 money32 gSceneryPlaceCost;
 scenery_key_shape gSceneryShape;
-sint16 gSceneryPlaceObject;
+//sint16 gSceneryPlaceObject;
 sint16 gSceneryPlaceZ;
 uint8 gSceneryPlacePathType;
 uint8 gSceneryPlacePathSlope;
 uint8 gSceneryPlaceRotation;
 bool gSceneryCannotDisplay;
 
+//ghosts related
 scenery_ghosts_list gSceneryGhost[SCENERY_GHOST_LIST_SIZE];
+scenery_ghosts_last gSceneryLastGhost;
 uint16 gSceneryLastIndex;
 
+//keypad related
 scenery_key_shift gSceneryShift;
 scenery_key_ctrl gSceneryCtrl;
 scenery_key_drag gSceneryDrag;
 
 sint16 gScenerySetHeight;
-
-
 uint8 gSceneryGroundFlags;
-
 money32 gClearSceneryCost;
 
 // rct2: 0x009A3E74
@@ -209,8 +210,9 @@ void scenery_remove_ghost_tool_placement(bool leaveplacable) {
             game_do_command(
                 pos.x,
                 105 | (gSceneryGhost[i].element_type << 8),
+                //105 | (gSceneryGhost[i].orientation << 8),
                 pos.y,
-                pos.z | (gSceneryPlaceObject << 8),
+                pos.z | (gSceneryLastGhost.selected_tab << 8),
                 GAME_COMMAND_REMOVE_SCENERY,
                 0,
                 0);
@@ -238,12 +240,12 @@ void scenery_remove_ghost_tool_placement(bool leaveplacable) {
         }
 
         if (gSceneryGhost[i].type & (1 << 2)) {
-            rct_map_element* map_element = gSceneryGhost[i].element;
+            //rct_map_element* map_element = gSceneryGhost[i].element;
             game_do_command(
                 pos.x,
                 105 | (gSceneryGhost[i].element_type << 8),
                 pos.y,
-                gSceneryGhost[i].rotation | (map_element->base_height << 8),
+                gSceneryGhost[i].rotation | (gSceneryGhost[i].position.z << 8),
                 GAME_COMMAND_REMOVE_WALL,
                 0,
                 0);
@@ -252,7 +254,7 @@ void scenery_remove_ghost_tool_placement(bool leaveplacable) {
         if (gSceneryGhost[i].type & (1 << 3)) {
             game_do_command(
                 pos.x,
-                105 | (gSceneryPlaceRotation << 8),
+                105 | (gSceneryGhost[i].orientation << 8),
                 pos.y,
                 pos.z,
                 GAME_COMMAND_REMOVE_LARGE_SCENERY,
@@ -265,7 +267,7 @@ void scenery_remove_ghost_tool_placement(bool leaveplacable) {
                 pos.x,
                 105,
                 pos.y,
-                pos.z | (gSceneryPlaceRotation << 8),
+                pos.z | (gSceneryGhost[i].orientation << 8),
                 GAME_COMMAND_REMOVE_BANNER,
                 0,
                 0);
