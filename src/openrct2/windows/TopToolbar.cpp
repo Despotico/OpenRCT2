@@ -1187,7 +1187,7 @@ static bool trigger_set_drag_begin(sint16 x, sint16 y, uint16 selected_scenery)
     //screen_get_map_xy(x, y, &(gSceneryDrag.x), &(gSceneryDrag.y), nullptr);
     get_map_coordinates_from_pos(x, y, flags, &(gSceneryDrag.x), &(gSceneryDrag.y), &interaction_type, &map_element, nullptr);
     if (gSceneryGhost[0].type) {
-        gSceneryDrag.rotation = gSceneryGhost[0].rotation;
+        gSceneryDrag.rotation = gSceneryGhost[0].orientation;
     }
     else {
         if ((selected_scenery >> 8) == SCENERY_TYPE_SMALL)
@@ -2059,7 +2059,7 @@ static void window_top_toolbar_scenery_tool_down(sint16 x, sint16 y, rct_window 
             && !(flags & GAME_COMMAND_FLAG_NETWORKED)) 
         {
             copy_to_format_arg(gTopToolbarFormatArgs);
-            window_error_open(gGameCommandErrorTitle, _scenery_placement_error);
+            context_show_error(gGameCommandErrorTitle, _scenery_placement_error);
         }
     }
     
@@ -3005,8 +3005,12 @@ static money32 try_place_ghost_scenery(rct_xy16 map_tile, rct_xy16 map_tile2, rc
 // 3. Try to insert the ghost according to height rules in choosen points
 // 5. Update only if general settings or last point (mouseover) have changed
 // 6. If clicked attempt to insert all elements based on list of ghosts
-// 7. DO not change some of the rules made during ghost placement, as it might
-// lead to desync in mp game; On place recalculate params.
+// 
+// Whole idea can be done 2 ways:
+// a) issue a list of commands (PROBLEM: texts windows handling, multiple calls)
+// b) issue one command that does that trick (PROBLEM: more files affected +
+// needs more parameters in game.c)
+// For now a) approach is used.
 //-----------------------------------------------------------------------------
 
 //  rct2: 0x006E287B
@@ -3162,8 +3166,6 @@ static void top_toolbar_tool_update_scenery(sint16 x, sint16 y){
                 gSceneryLastGhost.parameter_1 == parameter1 &&
                 gSceneryLastGhost.parameter_2 == parameter2 &&
                 gSceneryLastGhost.parameter_3 == parameter3)
-                //gSceneryLastGhost.place_object == selected_tab &&
-                //gSceneryLastGhost.rotation == parameter2 & 0xFF &&
             {
                 return;
             }
@@ -3209,7 +3211,6 @@ static void top_toolbar_tool_update_scenery(sint16 x, sint16 y){
                         case MAP_SELECT_TYPE_EDGE_0:
                         case MAP_SELECT_TYPE_EDGE_2:
                             draglenY = (mapTile.y - gSceneryDrag.y) / 32;
-                            //if (draglenY > 0) draglenY++; //correction
                             PositionB.y = gSceneryDrag.y + draglenY * 32;
                             PositionB.x = gSceneryDrag.x;
                             draglenX = 0;
@@ -3217,7 +3218,6 @@ static void top_toolbar_tool_update_scenery(sint16 x, sint16 y){
                         case MAP_SELECT_TYPE_EDGE_1:
                         case MAP_SELECT_TYPE_EDGE_3:
                             draglenX = (mapTile.x - gSceneryDrag.x) / 32;
-                            //if (draglenX > 0) draglenX++; //correction
                             PositionB.x = gSceneryDrag.x + draglenX * 32;
                             PositionB.y = gSceneryDrag.y;
                             draglenY = 0;
