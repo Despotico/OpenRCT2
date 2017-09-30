@@ -54,7 +54,7 @@ bool gSceneryCannotDisplay;
 //ghosts related
 scenery_ghosts_list gSceneryGhost[SCENERY_GHOST_LIST_SIZE];
 scenery_ghosts_last gSceneryLastGhost;
-uint16 gSceneryLastIndex;
+scenery_ghosts_last gFailedGhostPlace;
 
 //keypad related
 scenery_key_shift gSceneryShift;
@@ -188,17 +188,6 @@ void scenery_increase_age(sint32 x, sint32 y, rct_map_element *mapElement)
 void scenery_remove_ghost_tool_placement(bool leaveplacable) {
 
     rct_xyz16 pos;
-    gSceneryLastIndex = 0;
-
-    /*bool enc = false;
-    for (sint16 i = 0; i < SCENERY_GHOST_LIST_SIZE; i++)
-    {
-        if (!gSceneryGhost[i].type) enc = true;
-        if (gSceneryGhost[i].type && enc)
-        {
-            enc = true;
-        }
-    }*/
 
     for (sint16 i = 0; i<SCENERY_GHOST_LIST_SIZE; i++) {
         if (!gSceneryGhost[i].type)
@@ -210,7 +199,6 @@ void scenery_remove_ghost_tool_placement(bool leaveplacable) {
             game_do_command(
                 pos.x,
                 105 | (gSceneryGhost[i].element_type << 8),
-                //105 | (gSceneryGhost[i].orientation << 8),
                 pos.y,
                 pos.z | (gSceneryLastGhost.selected_tab << 8),
                 GAME_COMMAND_REMOVE_SCENERY,
@@ -240,12 +228,11 @@ void scenery_remove_ghost_tool_placement(bool leaveplacable) {
         }
 
         if (gSceneryGhost[i].type & (1 << 2)) {
-            //rct_map_element* map_element = gSceneryGhost[i].element;
             game_do_command(
                 pos.x,
                 105 | (gSceneryGhost[i].element_type << 8),
                 pos.y,
-                gSceneryGhost[i].rotation | (gSceneryGhost[i].position.z << 8),
+                gSceneryGhost[i].orientation | (gSceneryGhost[i].position.z << 8),
                 GAME_COMMAND_REMOVE_WALL,
                 0,
                 0);
@@ -254,7 +241,7 @@ void scenery_remove_ghost_tool_placement(bool leaveplacable) {
         if (gSceneryGhost[i].type & (1 << 3)) {
             game_do_command(
                 pos.x,
-                105 | (gSceneryGhost[i].orientation << 8),
+                105 | (gSceneryGhost[i].rotation << 8),
                 pos.y,
                 pos.z,
                 GAME_COMMAND_REMOVE_LARGE_SCENERY,

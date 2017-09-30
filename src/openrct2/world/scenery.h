@@ -131,14 +131,14 @@ assert_struct_size(rct_large_scenery_entry, 20);
 
 typedef struct {
     rct_map_element *element;
-    uint8 element_type;
-    uint8 type;
+    uint8 element_type; //*element type
+    uint8 type; //type of scenery
     rct_xyz16 position; //includes z as map element height
     sint16 placing_height; //placing z
-    uint32 path_type;
-    uint8 rotation;
-    uint8 orientation;
-    bool placable;
+    uint32 path_type; 
+    uint8 rotation; //rotation of the element
+    uint8 orientation; //orientation inside the tile
+    bool placable; //if true element can be placed (ghost was delelted but data stayed)
 }scenery_ghosts_list;
 
 typedef struct  {
@@ -319,20 +319,17 @@ extern colour_t gWindowSceneryTertiaryColour;
 extern bool gWindowSceneryEyedropperEnabled;
 
 extern rct_map_element *gSceneryMapElement;
-//extern uint8 gSceneryMapElementType;
 
 extern money32 gSceneryPlaceCost;
-//extern sint16 gSceneryPlaceObject;
 extern sint16 gSceneryPlaceZ;
 extern uint8 gSceneryPlacePathType;
 extern uint8 gSceneryPlacePathSlope;
-//extern uint8 gSceneryPlaceRotation;
 extern scenery_key_shape gSceneryShape;
 extern bool gSceneryCannotDisplay;
 
 extern scenery_ghosts_list gSceneryGhost[];
 extern scenery_ghosts_last gSceneryLastGhost;
-extern uint16 gSceneryLastIndex;
+extern scenery_ghosts_last gFailedGhostPlace;
 
 extern scenery_key_shift gSceneryShift;
 extern scenery_key_ctrl gSceneryCtrl;

@@ -471,10 +471,7 @@ void window_scenery_open()
     window->scenery.selected_scenery_id = -1;
     window->scenery.hover_counter = 0;
     window_push_others_below(window);
-    //gSceneryGhostType = 0;
-    gSceneryLastIndex = 1;
     gSceneryPlaceCost = MONEY32_UNDEFINED;
-    //gSceneryPlaceRotation = 0;
     gWindowSceneryPaintEnabled = 0; // repaint coloured scenery tool state
     gWindowSceneryEyedropperEnabled = false;
     gWindowSceneryClusterEnabled = 0; // build cluster tool state
