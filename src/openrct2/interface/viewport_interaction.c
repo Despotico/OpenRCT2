@@ -381,16 +381,20 @@ sint32 viewport_interaction_right_click(sint32 x, sint32 y)
         viewport_interaction_remove_footpath_item(info.mapElement, info.x, info.y);
         break;
     case VIEWPORT_INTERACTION_ITEM_PARK:
+        scenery_remove_ghost_tool_placement(false);
         viewport_interaction_remove_park_entrance(info.mapElement, info.x, info.y);
         break;
     case VIEWPORT_INTERACTION_ITEM_WALL:
+        scenery_remove_ghost_tool_placement(false);
         viewport_interaction_remove_park_wall(info.mapElement, info.x, info.y);
         break;
     case VIEWPORT_INTERACTION_ITEM_LARGE_SCENERY:
+        scenery_remove_ghost_tool_placement(false);
         viewport_interaction_remove_large_scenery(info.mapElement, info.x, info.y);
         break;
     case VIEWPORT_INTERACTION_ITEM_BANNER:
         context_open_detail_window(WD_BANNER, info.mapElement->properties.banner.index);
+        scenery_remove_ghost_tool_placement(false);
         break;
     }
 

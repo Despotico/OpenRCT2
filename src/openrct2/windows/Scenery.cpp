@@ -465,14 +465,15 @@ void window_scenery_open()
     window_scenery_update_scroll(window);
     show_gridlines();
     gWindowSceneryRotation = 3;
-    gSceneryCtrlPressed = false;
-    gSceneryShiftPressed = false;
+    gSceneryCtrl.pressed = false;
+    gSceneryShift.pressed = false;
+    gSceneryDrag.pressed = false;
+    gSceneryCannotDisplay = false;
+    gScenerySetHeight = 0;
     window->scenery.selected_scenery_id = -1;
     window->scenery.hover_counter = 0;
     window_push_others_below(window);
-    gSceneryGhostType = 0;
     gSceneryPlaceCost = MONEY32_UNDEFINED;
-    gSceneryPlaceRotation = 0;
     gWindowSceneryPaintEnabled = 0; // repaint coloured scenery tool state
     gWindowSceneryEyedropperEnabled = false;
     gWindowSceneryClusterEnabled = 0; // build cluster tool state
@@ -489,7 +490,7 @@ void window_scenery_open()
  */
 void window_scenery_close(rct_window *w)
 {
-    scenery_remove_ghost_tool_placement();
+    scenery_remove_ghost_tool_placement(false);
     hide_gridlines();
     viewport_set_visibility(0);
 
@@ -558,7 +559,7 @@ static void window_scenery_mouseup(rct_window *w, rct_widgetindex widgetIndex)
     case WIDX_SCENERY_ROTATE_OBJECTS_BUTTON:
         gWindowSceneryRotation++;
         gWindowSceneryRotation = gWindowSceneryRotation % 4;
-        scenery_remove_ghost_tool_placement();
+        scenery_remove_ghost_tool_placement(false);
         window_invalidate(w);
         break;
     case WIDX_SCENERY_REPAINT_SCENERY_BUTTON:

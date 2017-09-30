@@ -32,6 +32,8 @@
 #define SCENERY_PATH_SCENERY_ID_MIN  0x100
 #define SCENERY_PATH_SCENERY_ID_MAX  0x10F
 
+#define SCENERY_GHOST_LIST_SIZE      0xFF 
+
 #pragma pack(push, 1)
 typedef struct rct_small_scenery_entry {
     uint32 flags;           // 0x06
@@ -127,6 +129,27 @@ typedef struct rct_large_scenery_entry {
 assert_struct_size(rct_large_scenery_entry, 20);
 #endif
 
+typedef struct {
+    rct_map_element *element;
+    uint8 element_type; //*element type
+    uint8 type; //type of scenery
+    rct_xyz16 position; //includes z as map element height
+    sint16 placing_height; //placing z
+    uint32 path_type; 
+    uint8 rotation; //rotation of the element
+    uint8 orientation; //orientation inside the tile
+    bool placable; //if true element can be placed (ghost was delelted but data stayed)
+}scenery_ghosts_list;
+
+typedef struct  {
+    rct_xyz16 posA;
+    rct_xyz16 posB;
+    uint16 selected_tab;
+    uint32 parameter_1;
+    uint32 parameter_2;
+    uint32 parameter_3;
+}scenery_ghosts_last;
+
 typedef enum {
     LARGE_SCENERY_FLAG_HAS_PRIMARY_COLOUR = (1 << 0),   // 0x1
     LARGE_SCENERY_FLAG_HAS_SECONDARY_COLOUR = (1 << 1), // 0x2
@@ -209,6 +232,31 @@ typedef struct rct_scenery_set_entry {
 assert_struct_size(rct_scenery_set_entry, 14 + 2 * 0x80);
 #pragma pack(pop)
 
+
+//Key runtime data
+typedef struct
+{
+    bool pressed;
+    sint16 x;
+    sint16 y;
+    sint16 offset;
+}scenery_key_shift;
+
+typedef struct
+{
+    bool pressed;
+    sint16 z;
+}scenery_key_ctrl;
+
+typedef struct
+{
+    bool pressed;
+    sint16 x;
+    sint16 y;
+    sint16 z;
+    sint16 rotation;
+}scenery_key_drag;
+
 enum {
     PATH_BIT_FLAG_IS_BIN                    = 1 << 0,
     PATH_BIT_FLAG_IS_BENCH                  = 1 << 1,
@@ -236,6 +284,24 @@ enum {
     SCENERY_TYPE_BANNER
 };
 
+typedef enum {
+    SCENERY_KEY_ACTION_NONE,
+    SCENERY_KEY_ACTION_KEEP_HEIGHT,
+    SCENERY_KEY_ACTION_RAISE_HEIGHT,
+    SCENERY_KEY_ACTION_RAISE_AT_SELECTED,
+    SCENERY_KEY_ACTION_DRAG,
+    SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT,
+    SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,
+    SCENERY_KEY_ACTION_DRAG_APPEND_KEEP_HEIGHT
+}scenery_key_action;
+
+typedef enum {
+    SCENERY_SHAPE_POINT,
+    SCENERY_SHAPE_LINE,
+    SCENERY_SHAPE_RECT,
+    SCENERY_SHAPE_HOLLOW
+} scenery_key_shape;
+
 #define SCENERY_ENTRIES_BY_TAB 256
 
 #ifdef __cplusplus
@@ -253,27 +319,23 @@ extern colour_t gWindowSceneryTertiaryColour;
 extern bool gWindowSceneryEyedropperEnabled;
 
 extern rct_map_element *gSceneryMapElement;
-extern uint8 gSceneryMapElementType;
 
 extern money32 gSceneryPlaceCost;
-extern sint16 gSceneryPlaceObject;
 extern sint16 gSceneryPlaceZ;
 extern uint8 gSceneryPlacePathType;
 extern uint8 gSceneryPlacePathSlope;
-extern uint8 gSceneryPlaceRotation;
+extern scenery_key_shape gSceneryShape;
+extern bool gSceneryCannotDisplay;
 
-extern uint8 gSceneryGhostType;
-extern rct_xyz16 gSceneryGhostPosition;
-extern uint32 gSceneryGhostPathObjectType;
-extern uint8 gSceneryGhostWallRotation;
+extern scenery_ghosts_list gSceneryGhost[];
+extern scenery_ghosts_last gSceneryLastGhost;
+extern scenery_ghosts_last gFailedGhostPlace;
 
-extern sint16 gSceneryShiftPressed;
-extern sint16 gSceneryShiftPressX;
-extern sint16 gSceneryShiftPressY;
-extern sint16 gSceneryShiftPressZOffset;
+extern scenery_key_shift gSceneryShift;
+extern scenery_key_ctrl gSceneryCtrl;
+extern scenery_key_drag gSceneryDrag;
 
-extern sint16 gSceneryCtrlPressed;
-extern sint16 gSceneryCtrlPressZ;
+extern sint16 gScenerySetHeight;
 
 extern uint8 gSceneryGroundFlags;
 
@@ -287,7 +349,7 @@ void init_scenery();
 void scenery_update_tile(sint32 x, sint32 y);
 void scenery_update_age(sint32 x, sint32 y, rct_map_element *mapElement);
 void scenery_set_default_placement_configuration();
-void scenery_remove_ghost_tool_placement();
+void scenery_remove_ghost_tool_placement(bool placable);
 bool window_scenery_set_selected_item(sint32 sceneryId);
 
 rct_scenery_entry *get_small_scenery_entry(sint32 entryIndex);

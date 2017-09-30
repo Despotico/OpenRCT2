@@ -108,4 +108,13 @@ static inline void set_format_arg_body(uint8 *args, size_t offset, uintptr_t val
     do { static_assert(sizeof(type) <= sizeof(uintptr_t), "Type too large"); \
     set_format_arg_body(gMapTooltipFormatArgs, offset, (uintptr_t)value, sizeof(type)); } while (0)
 
+#define copy_format_arg(dst) \
+    do { static_assert(sizeof(gCommonFormatArgs)== sizeof(dst), "Destination size different"); \
+    memcpy(dst, gCommonFormatArgs, sizeof(gCommonFormatArgs)); } while (0)
+
+#define copy_to_format_arg(src) \
+    do { static_assert(sizeof(gCommonFormatArgs)== sizeof(src), "Source size different"); \
+    memcpy(gCommonFormatArgs, src, sizeof(gCommonFormatArgs)); } while (0)
+
+
 #endif

@@ -145,7 +145,7 @@ void input_handle_keyboard(bool isTitle)
             gInputPlaceObjectModifier |= PLACE_OBJECT_MODIFIER_COPY_Z;
         }
         if (keysState[SDL_SCANCODE_LALT] || keysState[SDL_SCANCODE_RALT]) {
-            gInputPlaceObjectModifier |= 4;
+            gInputPlaceObjectModifier |= PLACE_OBJECT_MODIFIER_DRAG;
         }
 #ifdef __MACOSX__
         if (keysState[SDL_SCANCODE_LGUI] || keysState[SDL_SCANCODE_RGUI]) {

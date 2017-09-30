@@ -39,30 +39,30 @@ colour_t gWindowSceneryTertiaryColour;
 bool gWindowSceneryEyedropperEnabled;
 
 rct_map_element *gSceneryMapElement;
-uint8 gSceneryMapElementType;
+//uint8 gSceneryMapElementType;
 
+//various
 money32 gSceneryPlaceCost;
-sint16 gSceneryPlaceObject;
+scenery_key_shape gSceneryShape;
+//sint16 gSceneryPlaceObject;
 sint16 gSceneryPlaceZ;
 uint8 gSceneryPlacePathType;
 uint8 gSceneryPlacePathSlope;
 uint8 gSceneryPlaceRotation;
+bool gSceneryCannotDisplay;
 
-uint8 gSceneryGhostType;
-rct_xyz16 gSceneryGhostPosition;
-uint32 gSceneryGhostPathObjectType;
-uint8 gSceneryGhostWallRotation;
+//ghosts related
+scenery_ghosts_list gSceneryGhost[SCENERY_GHOST_LIST_SIZE];
+scenery_ghosts_last gSceneryLastGhost;
+scenery_ghosts_last gFailedGhostPlace;
 
-sint16 gSceneryShiftPressed;
-sint16 gSceneryShiftPressX;
-sint16 gSceneryShiftPressY;
-sint16 gSceneryShiftPressZOffset;
+//keypad related
+scenery_key_shift gSceneryShift;
+scenery_key_ctrl gSceneryCtrl;
+scenery_key_drag gSceneryDrag;
 
-sint16 gSceneryCtrlPressed;
-sint16 gSceneryCtrlPressZ;
-
+sint16 gScenerySetHeight;
 uint8 gSceneryGroundFlags;
-
 money32 gClearSceneryCost;
 
 // rct2: 0x009A3E74
@@ -72,6 +72,7 @@ const rct_xy8 ScenerySubTileOffsets[] = {
     { 23, 23 },
     { 23,  7 }
 };
+
 
 void scenery_increase_age(sint32 x, sint32 y, rct_map_element *mapElement);
 
@@ -184,82 +185,106 @@ void scenery_increase_age(sint32 x, sint32 y, rct_map_element *mapElement)
  *
  *  rct2: 0x006E2712
  */
-void scenery_remove_ghost_tool_placement(){
-    sint16 x, y, z;
+void scenery_remove_ghost_tool_placement(bool leaveplacable) {
 
-    x = gSceneryGhostPosition.x;
-    y = gSceneryGhostPosition.y;
-    z = gSceneryGhostPosition.z;
+    rct_xyz16 pos;
 
-    if (gSceneryGhostType & (1 << 0)){
-        gSceneryGhostType &= ~(1 << 0);
-        game_do_command(
-            x,
-            105 | (gSceneryMapElementType << 8),
-            y,
-            z | (gSceneryPlaceObject << 8),
-            GAME_COMMAND_REMOVE_SCENERY,
-            0,
-            0);
-    }
-
-    if (gSceneryGhostType & (1 << 1)){
-        gSceneryGhostType &= ~(1 << 1);
-        rct_map_element* map_element = map_get_first_element_at(x / 32, y / 32);
-
-        do{
-            if (map_element_get_type(map_element) != MAP_ELEMENT_TYPE_PATH)
-                continue;
-
-            if (map_element->base_height != z)
-                continue;
-
-            game_do_command(
-                x,
-                233 | (gSceneryPlacePathSlope << 8),
-                y,
-                z | (gSceneryPlacePathType << 8),
-                GAME_COMMAND_PLACE_PATH,
-                gSceneryGhostPathObjectType & 0xFFFF0000,
-                0);
+    for (sint16 i = 0; i<SCENERY_GHOST_LIST_SIZE; i++) {
+        if (!gSceneryGhost[i].type)
             break;
-        } while (!map_element_is_last_for_tile(map_element++));
-    }
 
-    if (gSceneryGhostType & (1 << 2)){
-        gSceneryGhostType &= ~(1 << 2);
-        game_do_command(
-            x,
-            105 | (gSceneryMapElementType << 8),
-            y,
-            gSceneryGhostWallRotation |(z << 8),
-            GAME_COMMAND_REMOVE_WALL,
-            0,
-            0);
-    }
+        pos = gSceneryGhost[i].position;
 
-    if (gSceneryGhostType & (1 << 3)){
-        gSceneryGhostType &= ~(1 << 3);
-        game_do_command(
-            x,
-            105 | (gSceneryPlaceRotation << 8),
-            y,
-            z,
-            GAME_COMMAND_REMOVE_LARGE_SCENERY,
-            0,
-            0);
-    }
+        if (gSceneryGhost[i].type & (1 << 0)) {
+            game_do_command(
+                pos.x,
+                105 | (gSceneryGhost[i].element_type << 8),
+                pos.y,
+                pos.z | (gSceneryLastGhost.selected_tab << 8),
+                GAME_COMMAND_REMOVE_SCENERY,
+                0,
+                0);
+        }
 
-    if (gSceneryGhostType & (1 << 4)){
-        gSceneryGhostType &= ~(1 << 4);
-        game_do_command(
-            x,
-            105,
-            y,
-            z | (gSceneryPlaceRotation << 8),
-            GAME_COMMAND_REMOVE_BANNER,
-            0,
-            0);
+        if (gSceneryGhost[i].type & (1 << 1)) {
+            rct_map_element* map_element = map_get_first_element_at(pos.x / 32, pos.y / 32);
+
+            do {
+                if (map_element_get_type(map_element) != MAP_ELEMENT_TYPE_PATH)
+                    continue;
+
+                if (map_element->base_height != pos.z)
+                    continue;
+                game_do_command(
+                    pos.x,
+                    233 | (gSceneryPlacePathSlope << 8),
+                    pos.y,
+                    pos.z | (gSceneryPlacePathType << 8),
+                    GAME_COMMAND_PLACE_PATH,
+                    gSceneryGhost[i].path_type & 0xFFFF0000,
+                    0);
+                break;
+            } while (!map_element_is_last_for_tile(map_element++));
+        }
+
+        if (gSceneryGhost[i].type & (1 << 2)) {
+            game_do_command(
+                pos.x,
+                105 | (gSceneryGhost[i].element_type << 8),
+                pos.y,
+                gSceneryGhost[i].orientation | (gSceneryGhost[i].position.z << 8),
+                GAME_COMMAND_REMOVE_WALL,
+                0,
+                0);
+        }
+
+        if (gSceneryGhost[i].type & (1 << 3)) {
+            game_do_command(
+                pos.x,
+                105 | (gSceneryGhost[i].rotation << 8),
+                pos.y,
+                pos.z,
+                GAME_COMMAND_REMOVE_LARGE_SCENERY,
+                0,
+                0);
+        }
+
+        if (gSceneryGhost[i].type & (1 << 4)) {
+            game_do_command(
+                pos.x,
+                105,
+                pos.y,
+                pos.z | (gSceneryGhost[i].orientation << 8),
+                GAME_COMMAND_REMOVE_BANNER,
+                0,
+                0);
+        }
+        if (gSceneryGhost[i].type & (1 << 0)) {
+            gSceneryGhost[i].type &= ~(1 << 0);
+        }
+        if (gSceneryGhost[i].type & (1 << 1)) {
+            gSceneryGhost[i].type &= ~(1 << 1);
+        }
+        if (gSceneryGhost[i].type & (1 << 2)) {
+            gSceneryGhost[i].type &= ~(1 << 2);
+        }
+        if (gSceneryGhost[i].type & (1 << 3)) {
+            gSceneryGhost[i].type &= ~(1 << 3);
+        }
+        if (gSceneryGhost[i].type & (1 << 4)) {
+            gSceneryGhost[i].type &= ~(1 << 4);
+        }
+        if (leaveplacable) {
+            gSceneryGhost[i].placable = true;
+        }
+    }
+    //iterate in search for ghosts memory that was left as 'placable'
+    for (sint16 i = 0; (i < SCENERY_GHOST_LIST_SIZE) && !leaveplacable; i++)
+    {
+        if (gSceneryGhost[i].placable)
+            gSceneryGhost[i].placable = false;
+        else
+            break;
     }
 }
 

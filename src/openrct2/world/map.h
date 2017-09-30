@@ -381,6 +381,8 @@ enum {
     MAP_SELECT_TYPE_EDGE_2,
     MAP_SELECT_TYPE_EDGE_3,
 };
+//transformation edge to first of connected corners:
+#define EDGE_TO_CORNERS_ROTATION_OFFSET (MAP_SELECT_TYPE_EDGE_0-MAP_SELECT_TYPE_CORNER_0)+1
 
 #ifdef __cplusplus
 extern "C" {
@@ -398,6 +400,8 @@ extern sint16 gMapSizeMinus2;
 extern sint16 gMapSize;
 extern sint16 gMapSizeMaxXY;
 extern sint16 gMapBaseZ;
+
+extern sint16 gMapCtrlPressed;
 
 extern uint16       gMapSelectFlags;
 extern uint16       gMapSelectType;
