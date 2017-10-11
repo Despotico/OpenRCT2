@@ -165,6 +165,7 @@ typedef struct {
     window_top_toolbar_state past_ctr;
     window_top_toolbar_state past_shift;
     window_top_toolbar_state past_alt;
+    scenery_key_action prev_state;
     scenery_key_action result_state;
     bool(*trigger[SPECIAL_KEY_FUNC_ARR_SIZE])(sint16 x, sint16 y, uint16 selected_scenery);
     bool(*support[SPECIAL_KEY_FUNC_ARR_SIZE])(sint16 x, sint16 y, uint16 selected_scenery);
@@ -314,6 +315,8 @@ money32 selection_raise_land(uint8 flags);
 
 static bool     _menuDropdownIncludesTwitch;
 static uint16   _unkF64F15;
+
+static scenery_key_action _lastKeyActionState;
 
 /**
  * Creates the main game top toolbar window.
@@ -1152,6 +1155,7 @@ static void scenery_eyedropper_tool_down(sint16 x, sint16 y, rct_widgetindex wid
 // window_top_toolbar_scenery_process_keypad
 //---------------------------------------------------------
 
+//sets static height (ctrl click) 
 static bool trigger_set_keep_height(sint16 x, sint16 y, uint16 selected_scenery)
 {
     rct_map_element* map_element;
@@ -1172,6 +1176,8 @@ static bool trigger_set_keep_height(sint16 x, sint16 y, uint16 selected_scenery)
     return false;
 }
 
+
+//sets point under x and y as second point of the drag (defines size of drag area)
 static bool trigger_set_drag_begin(sint16 x, sint16 y, uint16 selected_scenery)
 {
     uint8 cl = 0;
@@ -1185,20 +1191,21 @@ static bool trigger_set_drag_begin(sint16 x, sint16 y, uint16 selected_scenery)
         VIEWPORT_INTERACTION_MASK_WALL &
         VIEWPORT_INTERACTION_MASK_LARGE_SCENERY;
     //screen_get_map_xy(x, y, &(gSceneryDrag.x), &(gSceneryDrag.y), nullptr);
-    get_map_coordinates_from_pos(x, y, flags, &(gSceneryDrag.x), &(gSceneryDrag.y), &interaction_type, &map_element, nullptr);
+    get_map_coordinates_from_pos(x, y, flags, &(gSceneryDrag.x_tile), &(gSceneryDrag.y_tile), &interaction_type, &map_element, nullptr);
     if (gSceneryGhost[0].type) {
         gSceneryDrag.rotation = gSceneryGhost[0].orientation;
     }
     else {
         if ((selected_scenery >> 8) == SCENERY_TYPE_SMALL)
-            screen_get_map_xy_quadrant(x, y, &(gSceneryDrag.x), &(gSceneryDrag.y), &cl);
+            screen_get_map_xy_quadrant(x, y, &(gSceneryDrag.x_tile), &(gSceneryDrag.y_tile), &cl);
         else if ((selected_scenery >> 8) == SCENERY_TYPE_WALL)
-            screen_get_map_xy_side(x, y, &(gSceneryDrag.x), &(gSceneryDrag.y), &cl);
+            screen_get_map_xy_side(x, y, &(gSceneryDrag.x_tile), &(gSceneryDrag.y_tile), &cl);
         gSceneryDrag.rotation = cl & 0xFF;
     }
     return true;
 }
 
+//sets shift scroll orientation point (not a tile, screen coords)
 static bool trigger_set_elevation(sint16 x, sint16 y, uint16 selected_scenery)
 {
     // SHIFT pressed first time
@@ -1206,16 +1213,29 @@ static bool trigger_set_elevation(sint16 x, sint16 y, uint16 selected_scenery)
     gSceneryShift.x = x;
     gSceneryShift.y = y;
     gSceneryShift.offset = 0;
+    gSceneryShift.locked = false;
     return true;
 }
 
+//continously updates screen height
 static bool cont_set_elevation(sint16 x, sint16 y, uint16 selected_scenery)
 {
     // SHIFT keeps being pressed
     gSceneryShift.offset = (gSceneryShift.y - y + 4) & 0xFFF8;
+    gSceneryShift.locked = false;
     return true;
 }
 
+//lock shift height in current selection
+static bool cont_lock_elevation(sint16 x, sint16 y, uint16 selected_scenery)
+{
+    // SHIFT keeps being pressed
+    gSceneryShift.offset = 0;
+    gSceneryShift.locked = true;
+    return true;
+}
+
+//sets z of tile under the mouse as drag point orientation height
 static bool trigger_set_drag_height(sint16 x, sint16 y, uint16 selected_scenery)
 {
     rct_map_element* map_element;
@@ -1238,39 +1258,55 @@ static bool trigger_set_drag_height(sint16 x, sint16 y, uint16 selected_scenery)
     return true;
 }
 
+//forces to use drag point height as object height
 static bool trigger_use_drag_height(sint16 x, sint16 y, uint16 selected_scenery)
 {
     gScenerySetHeight = gSceneryDrag.z;
     return true;
 }
 
+//forces to use ctrl click height as object height
 static bool trigger_use_keep_height(sint16 x, sint16 y, uint16 selected_scenery)
 {
     gScenerySetHeight = gSceneryCtrl.z;
     return true;
 }
 
+//forces to use last  defined height as object height
+static bool trigger_use_keep_scroll_height(sint16 x, sint16 y, uint16 selected_scenery)
+{
+    gScenerySetHeight = gSceneryPlaceZ;
+    return true;
+}
+
 window_top_toolbar_scenery_special_key_reaction skey_tab[] =
-{ //  C SH ALT prv: C SH ALT,  STATE,                                  Trigger ; undefined result in SCENERY_KEY_ACTION_NONE
-    { F, F, F,      A, A, A, SCENERY_KEY_ACTION_NONE,{ nullptr },{ nullptr } },//keep height
-    { T, F, F,      A, A, A, SCENERY_KEY_ACTION_KEEP_HEIGHT,{ trigger_set_keep_height, trigger_set_drag_begin, trigger_use_keep_height },{ nullptr } },//keep height
-    { F, T, F,      A, A, A, SCENERY_KEY_ACTION_RAISE_HEIGHT,{ trigger_set_elevation },{ cont_set_elevation } },//raise by shift
-    { T, T, F,      T, F, A, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ trigger_set_keep_height, trigger_set_elevation, trigger_use_keep_height },{ nullptr } },//raise by shift at position
-    { T, T, F,      F, T, A, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ trigger_set_keep_height, trigger_set_elevation, trigger_use_keep_height }, nullptr },//raise by shift at position
-    { T, T, F,      A, A, A, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ nullptr },{ cont_set_elevation } },//raise by shift at position
+{ //  C SH ALT prv: C SH ALT, REQUIRED PREVIOUS STATE, RESULTING STATE,      Trigger ; undefined result in SCENERY_KEY_ACTION_NONE
+    { F, F, F,      A, A, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_NONE,{ nullptr },{ nullptr } },//keep height
+    { T, F, F,      A, A, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_KEEP_HEIGHT,{ trigger_set_keep_height, trigger_set_drag_begin, trigger_use_keep_height },{ nullptr } },//keep height
+    { F, T, F,      A, A, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_HEIGHT,{ trigger_set_drag_begin, trigger_set_elevation },{ cont_set_elevation } },//raise by shift
+    { T, T, F,      T, F, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ trigger_set_keep_height, trigger_set_elevation, trigger_use_keep_height },{ nullptr } },//raise by shift at position
+    { T, T, F,      F, T, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ trigger_set_keep_height, trigger_set_elevation, trigger_use_keep_height },{ nullptr } },//raise by shift at position
+    { T, T, F,      A, A, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ nullptr },{ cont_set_elevation } },//raise by shift at position
+    //ALT
+    { F, F, T,      F, F, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG,{ trigger_set_drag_begin, trigger_set_drag_height },{ nullptr } },//drag
+    { F, F, T,      F, T, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG,{ trigger_set_drag_height },{ nullptr } },//drag
+    //A) ALT and SHIFT (alt clicked first) - area is defined, raide or lower it;
+    { F, T, T,      F, F, T, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT,{ trigger_set_elevation,  trigger_use_drag_height }, nullptr },//drag during shift press (up down)
+    //B) ALT and SHIFT (shift clicked first) - height is defined, set the area
+    { F, T, T,      F, T, F, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_ADD_DRAG, { trigger_use_keep_scroll_height, cont_lock_elevation},{ nullptr } },//drag during shift press (up down)
+    //both keys are pressed - keeper function for A); ignore all ctrl presses in that state
+    { A, T, T,      A, T, T, SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT, SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT,{ nullptr },{ cont_set_elevation } },
+    //both keys are pressed - keeper function for B); ignore all ctrl presses in that state
+    { A, T, T,      A, T, T, SCENERY_KEY_ACTION_RAISE_ADD_DRAG, SCENERY_KEY_ACTION_RAISE_ADD_DRAG,{ nullptr },{ cont_lock_elevation } },
+    //ALT and CTRL
+    { T, F, T,      T, A, F, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_keep_height },{ nullptr } },//drag after ctrl press
+    { T, F, T,      F, A, T, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_drag_height },{ nullptr } },//ctrl during drag
+    { T, F, T,      F, A, F, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_drag_height },{ nullptr } },//at the same time
+    { T, F, T,      T, F, T, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_drag_height },{ nullptr } },//at the same time
+    //triple press - only 2 combos have sense: CTRL + ALT + SHIFT or CTRL + SHIFT + ALT
 
-    { F, F, T,      F, F, A, SCENERY_KEY_ACTION_DRAG,{ trigger_set_drag_begin, trigger_set_drag_height },{ nullptr } },//drag
-    { F, F, T,      F, T, A, SCENERY_KEY_ACTION_DRAG,{ trigger_set_drag_height },{ nullptr } },//drag
-    { F, T, T,      A, F, T, SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT,{ trigger_set_elevation,  trigger_use_drag_height }, nullptr },//drag during shift press (up down)
-    { F, T, T,      A, T, F, SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT,{ trigger_set_drag_begin, trigger_set_drag_height, trigger_use_drag_height },{ nullptr } },//drag during shift press (up down)
-    { F, T, T,      A, A, A, SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT,{ nullptr },{ cont_set_elevation } },
 
-    { T, F, T,      T, A, F, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_keep_height },{ nullptr } },//drag after ctrl press
-    { T, F, T,      F, A, T, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_drag_height },{ nullptr } },//ctrl during drag
-    { T, F, T,      F, A, F, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_drag_height },{ nullptr } },//at the same time
-    { T, F, T,      T, F, T, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_drag_height },{ nullptr } },//at the same time
-
-    { T, T, T,      A, A, A, SCENERY_KEY_ACTION_NONE,                nullptr, nullptr },//tbd, raise lower drag at position selected by either ctrl or alt inital press
+    { T, T, T,      A, A, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_NONE,                nullptr, nullptr },//tbd, raise lower drag at position selected by either ctrl or alt inital press
 };
 
 
@@ -1338,12 +1374,13 @@ static void window_top_toolbar_scenery_process_keypad(sint16 x, sint16 y, uint16
         uint8 index = 0;
         //state was changed, detect actions on change now
         for (uint8 i = 0; i <= sizeof(skey_tab) / sizeof(skey_tab[0]); i++) {
-            if (skey_tab[i].ctrl_pressed == ctrl_pressed &&
-                skey_tab[i].alt_pressed == alt_pressed &&
-                skey_tab[i].shift_pressed == shift_pressed &&
+            if ((skey_tab[i].ctrl_pressed == A || skey_tab[i].ctrl_pressed == ctrl_pressed) &&
+                (skey_tab[i].alt_pressed == A || skey_tab[i].alt_pressed == alt_pressed) &&
+                (skey_tab[i].shift_pressed == A || skey_tab[i].shift_pressed == shift_pressed) &&
                 (skey_tab[i].past_ctr == A || skey_tab[i].past_ctr == ctrl_was_pressed) &&
                 (skey_tab[i].past_alt == A || skey_tab[i].past_alt == alt_was_pressed) &&
-                (skey_tab[i].past_shift == A || skey_tab[i].past_shift == shift_was_pressed))
+                (skey_tab[i].past_shift == A || skey_tab[i].past_shift == shift_was_pressed) &&
+                (skey_tab[i].prev_state == SCENERY_KEY_ACTION_ANY  || skey_tab[i].prev_state == _lastKeyActionState))
             {
                 index = i+1;
                 break;
@@ -1351,11 +1388,15 @@ static void window_top_toolbar_scenery_process_keypad(sint16 x, sint16 y, uint16
         }
         if (!index) {
             *key_action = SCENERY_KEY_ACTION_NONE;
+            _lastKeyActionState = *key_action;
             return;
         }
         else {
             index = index - 1;
             *key_action = skey_tab[index].result_state;
+            _lastKeyActionState = *key_action;
+
+            //run triggers
             if (skey_tab[index].trigger) {
                 bool check = true;
                 for (uint8 i = 0; i < SPECIAL_KEY_FUNC_ARR_SIZE; i++) {
@@ -1363,6 +1404,7 @@ static void window_top_toolbar_scenery_process_keypad(sint16 x, sint16 y, uint16
                         skey_tab[index].trigger[i](x, y, selected_scenery);
                         if (!check) {
                             *key_action = SCENERY_KEY_ACTION_NONE;
+                            _lastKeyActionState = *key_action;
                             return;
                         }
                     }
@@ -1392,12 +1434,13 @@ static void window_top_toolbar_scenery_process_keypad(sint16 x, sint16 y, uint16
         //maintain the state
         uint8 index = 0;
         for (uint8 i = 0; i <= sizeof(skey_tab) / sizeof(skey_tab[0]); i++) {
-            if (skey_tab[i].ctrl_pressed == ctrl_pressed &&
-                skey_tab[i].alt_pressed == alt_pressed &&
-                skey_tab[i].shift_pressed == shift_pressed &&
+            if ((skey_tab[i].ctrl_pressed == A || skey_tab[i].ctrl_pressed == ctrl_pressed) &&
+                (skey_tab[i].alt_pressed == A || skey_tab[i].alt_pressed == alt_pressed) &&
+                (skey_tab[i].shift_pressed == A || skey_tab[i].shift_pressed == shift_pressed) &&
                 (skey_tab[i].past_ctr == A || skey_tab[i].past_ctr == ctrl_was_pressed) &&
                 (skey_tab[i].past_alt == A || skey_tab[i].past_alt == alt_was_pressed) &&
-                (skey_tab[i].past_shift == A || skey_tab[i].past_shift == shift_was_pressed))
+                (skey_tab[i].past_shift == A || skey_tab[i].past_shift == shift_was_pressed) &&
+                (skey_tab[i].prev_state == SCENERY_KEY_ACTION_ANY || skey_tab[i].prev_state == _lastKeyActionState))
             {
                 index = i + 1;
                 break;
@@ -1405,6 +1448,7 @@ static void window_top_toolbar_scenery_process_keypad(sint16 x, sint16 y, uint16
         }
         if (!index) {
             *key_action = SCENERY_KEY_ACTION_NONE;
+            _lastKeyActionState = *key_action;
             return;
         }
         else {
@@ -1417,6 +1461,7 @@ static void window_top_toolbar_scenery_process_keypad(sint16 x, sint16 y, uint16
                         skey_tab[index].support[i](x, y, selected_scenery);
                         if (!check) {
                             *key_action = SCENERY_KEY_ACTION_NONE;
+                            _lastKeyActionState = *key_action;
                             return;
                         }
                     }
@@ -1515,6 +1560,7 @@ static void window_top_toolbar_scenery_get_tile_params (
                 case SCENERY_KEY_ACTION_RAISE_AT_SELECTED:
                     x = gSceneryShift.x;
                     y = gSceneryShift.y;
+                case SCENERY_KEY_ACTION_RAISE_ADD_DRAG:
                     z = gScenerySetHeight;
                     screen_get_map_xy_quadrant_with_z(x, y, z, grid_x, grid_y, &cl);
                     z += gSceneryShift.offset;
@@ -1590,6 +1636,7 @@ static void window_top_toolbar_scenery_get_tile_params (
                 case SCENERY_KEY_ACTION_RAISE_AT_SELECTED:
                     x = gSceneryShift.x;
                     y = gSceneryShift.y;
+                case SCENERY_KEY_ACTION_RAISE_ADD_DRAG:
                     z = gScenerySetHeight;
                     screen_get_map_xy_with_z(x, y, z, grid_x, grid_y);
                     z += gSceneryShift.offset;
@@ -1675,6 +1722,7 @@ static void window_top_toolbar_scenery_get_tile_params (
             case SCENERY_KEY_ACTION_RAISE_AT_SELECTED:
                 x = gSceneryShift.x;
                 y = gSceneryShift.y;
+            case SCENERY_KEY_ACTION_RAISE_ADD_DRAG:
                 z = gScenerySetHeight;
                 screen_get_map_xy_side_with_z(x, y, z, grid_x, grid_y, &cl);
                 z += gSceneryShift.offset;
@@ -1735,6 +1783,7 @@ static void window_top_toolbar_scenery_get_tile_params (
             case SCENERY_KEY_ACTION_RAISE_AT_SELECTED:
                 x = gSceneryShift.y;
                 y = gSceneryShift.y;
+            case SCENERY_KEY_ACTION_RAISE_ADD_DRAG:
                 z = gScenerySetHeight;
                 screen_get_map_xy_with_z(x, y, z, grid_x, grid_y);
                 z += gSceneryShift.offset;
@@ -2608,7 +2657,7 @@ static money32 try_place_ghost_scenery(rct_xy16 map_tile, rct_xy16 map_tile2, rc
     //for shift click we need to correct height a bit using CURRENT tile limits
     //wall is problematic due to the fact that it can be hollow (some tiles do not match current tile
     //direction). Current tile, luckily, is always the border one so we can check it.
-    if (gSceneryPlaceZ != 0 && gSceneryShift.pressed)
+    if (gSceneryPlaceZ != 0 && gSceneryShift.pressed && !gSceneryShift.locked)
     {
         pos.x = current_tile.x;
         pos.y = current_tile.y;
@@ -3076,8 +3125,8 @@ static void top_toolbar_tool_update_scenery(sint16 x, sint16 y){
             //check shape and border points
             if (key_action >= SCENERY_KEY_ACTION_DRAG) {
                 key_shape = SCENERY_SHAPE_RECT;
-                PositionA.x = gSceneryDrag.x;
-                PositionA.y = gSceneryDrag.y;
+                PositionA.x = gSceneryDrag.x_tile;
+                PositionA.y = gSceneryDrag.y_tile;
             }
             else {
                 key_shape = SCENERY_SHAPE_POINT;
@@ -3184,8 +3233,8 @@ static void top_toolbar_tool_update_scenery(sint16 x, sint16 y){
         case SCENERY_TYPE_WALL:
             gMapSelectFlags |= MAP_SELECT_FLAG_ENABLE;
             gMapSelectType = MAP_SELECT_TYPE_EDGE_0 + (parameter2 & 0xFF);
-            PositionA.x = gSceneryDrag.x;
-            PositionA.y = gSceneryDrag.y;
+            PositionA.x = gSceneryDrag.x_tile;
+            PositionA.y = gSceneryDrag.y_tile;
             PositionB.x = mapTile.x;
             PositionB.y = mapTile.y;
 
@@ -3197,8 +3246,8 @@ static void top_toolbar_tool_update_scenery(sint16 x, sint16 y){
                     sint16 draglenX = 0;
                     sint16 draglenY = 0;
 
-                    PositionA.x = gSceneryDrag.x;
-                    PositionA.y = gSceneryDrag.y;
+                    PositionA.x = gSceneryDrag.x_tile;
+                    PositionA.y = gSceneryDrag.y_tile;
 
                     key_shape = SCENERY_SHAPE_LINE;
                     gMapSelectFlags |= MAP_SELECT_FLAG_ENABLE;
@@ -3210,16 +3259,16 @@ static void top_toolbar_tool_update_scenery(sint16 x, sint16 y){
                     switch (rotation_type) {
                         case MAP_SELECT_TYPE_EDGE_0:
                         case MAP_SELECT_TYPE_EDGE_2:
-                            draglenY = (mapTile.y - gSceneryDrag.y) / 32;
-                            PositionB.y = gSceneryDrag.y + draglenY * 32;
-                            PositionB.x = gSceneryDrag.x;
+                            draglenY = (mapTile.y - gSceneryDrag.y_tile) / 32;
+                            PositionB.y = gSceneryDrag.y_tile + draglenY * 32;
+                            PositionB.x = gSceneryDrag.x_tile;
                             draglenX = 0;
                             break;
                         case MAP_SELECT_TYPE_EDGE_1:
                         case MAP_SELECT_TYPE_EDGE_3:
-                            draglenX = (mapTile.x - gSceneryDrag.x) / 32;
-                            PositionB.x = gSceneryDrag.x + draglenX * 32;
-                            PositionB.y = gSceneryDrag.y;
+                            draglenX = (mapTile.x - gSceneryDrag.x_tile) / 32;
+                            PositionB.x = gSceneryDrag.x_tile + draglenX * 32;
+                            PositionB.y = gSceneryDrag.y_tile;
                             draglenY = 0;
                             break;
                         default:

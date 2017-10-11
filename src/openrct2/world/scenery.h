@@ -233,26 +233,30 @@ assert_struct_size(rct_scenery_set_entry, 14 + 2 * 0x80);
 #pragma pack(pop)
 
 
-//Key runtime data
+//Shift key runtime data
 typedef struct
 {
     bool pressed;
     sint16 x;
     sint16 y;
-    sint16 offset;
+    sint16 offset; //dynamically calculated z offset
+    bool locked;
 }scenery_key_shift;
 
+//Ctrl key runtime data
 typedef struct
 {
     bool pressed;
     sint16 z;
 }scenery_key_ctrl;
 
+
+//Drag area second point control structure
 typedef struct
 {
     bool pressed;
-    sint16 x;
-    sint16 y;
+    sint16 x_tile;
+    sint16 y_tile;
     sint16 z;
     sint16 rotation;
 }scenery_key_drag;
@@ -291,8 +295,10 @@ typedef enum {
     SCENERY_KEY_ACTION_RAISE_AT_SELECTED,
     SCENERY_KEY_ACTION_DRAG,
     SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT,
+    SCENERY_KEY_ACTION_RAISE_ADD_DRAG,
     SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,
-    SCENERY_KEY_ACTION_DRAG_APPEND_KEEP_HEIGHT
+    SCENERY_KEY_ACTION_DRAG_APPEND_KEEP_HEIGHT,
+    SCENERY_KEY_ACTION_ANY, //any of them - only for key triggers
 }scenery_key_action;
 
 typedef enum {
