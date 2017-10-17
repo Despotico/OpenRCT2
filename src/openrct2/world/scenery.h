@@ -257,6 +257,8 @@ typedef struct
     bool pressed;
     sint16 x_tile;
     sint16 y_tile;
+    sint16 x;
+    sint16 y;
     sint16 z;
     sint16 rotation;
 }scenery_key_drag;

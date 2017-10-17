@@ -1178,7 +1178,7 @@ static bool trigger_set_keep_height(sint16 x, sint16 y, uint16 selected_scenery)
 
 
 //sets point under x and y as second point of the drag (defines size of drag area)
-static bool trigger_set_drag_begin(sint16 x, sint16 y, uint16 selected_scenery)
+static bool trigger_set_origin_begin(sint16 x, sint16 y, uint16 selected_scenery)
 {
     uint8 cl = 0;
     rct_map_element* map_element;
@@ -1192,6 +1192,7 @@ static bool trigger_set_drag_begin(sint16 x, sint16 y, uint16 selected_scenery)
         VIEWPORT_INTERACTION_MASK_LARGE_SCENERY;
     //screen_get_map_xy(x, y, &(gSceneryDrag.x), &(gSceneryDrag.y), nullptr);
     get_map_coordinates_from_pos(x, y, flags, &(gSceneryDrag.x_tile), &(gSceneryDrag.y_tile), &interaction_type, &map_element, nullptr);
+    gSceneryDrag.x = x; gSceneryDrag.y = y;
     if (gSceneryGhost[0].type) {
         gSceneryDrag.rotation = gSceneryGhost[0].orientation;
     }
@@ -1258,6 +1259,13 @@ static bool trigger_set_drag_height(sint16 x, sint16 y, uint16 selected_scenery)
     return true;
 }
 
+static bool trigger_use_origin_coords_for_scroll(sint16 x, sint16 y, uint16 selected_scenery)
+{
+    gSceneryShift.x = gSceneryDrag.x;
+    gSceneryShift.y = gSceneryDrag.y;
+    return true;
+}
+
 //forces to use drag point height as object height
 static bool trigger_use_drag_height(sint16 x, sint16 y, uint16 selected_scenery)
 {
@@ -1273,36 +1281,69 @@ static bool trigger_use_keep_height(sint16 x, sint16 y, uint16 selected_scenery)
 }
 
 //forces to use last  defined height as object height
-static bool trigger_use_keep_scroll_height(sint16 x, sint16 y, uint16 selected_scenery)
+static bool trigger_use_scroll_height(sint16 x, sint16 y, uint16 selected_scenery)
 {
     gScenerySetHeight = gSceneryPlaceZ;
+    return true;
+}
+
+//overwrites ctrl height for futher ctrl howering
+static bool trigger_override_keep_height(sint16 x, sint16 y, uint16 selected_scenery)
+{
+    gSceneryCtrl.z = gSceneryPlaceZ;
     return true;
 }
 
 window_top_toolbar_scenery_special_key_reaction skey_tab[] =
 { //  C SH ALT prv: C SH ALT, REQUIRED PREVIOUS STATE, RESULTING STATE,      Trigger ; undefined result in SCENERY_KEY_ACTION_NONE
     { F, F, F,      A, A, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_NONE,{ nullptr },{ nullptr } },//keep height
-    { T, F, F,      A, A, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_KEEP_HEIGHT,{ trigger_set_keep_height, trigger_set_drag_begin, trigger_use_keep_height },{ nullptr } },//keep height
-    { F, T, F,      A, A, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_HEIGHT,{ trigger_set_drag_begin, trigger_set_elevation },{ cont_set_elevation } },//raise by shift
-    { T, T, F,      T, F, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ trigger_set_keep_height, trigger_set_elevation, trigger_use_keep_height },{ nullptr } },//raise by shift at position
-    { T, T, F,      F, T, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ trigger_set_keep_height, trigger_set_elevation, trigger_use_keep_height },{ nullptr } },//raise by shift at position
-    { T, T, F,      A, A, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ nullptr },{ cont_set_elevation } },//raise by shift at position
+    //Ctrl + shift - release handlers
+    { T, F, F,      T, T, F, SCENERY_KEY_ACTION_RAISE_AT_SELECTED, SCENERY_KEY_ACTION_KEEP_HEIGHT,{ trigger_use_scroll_height, trigger_override_keep_height },{ nullptr } },
+    { T, F, F,      T, T, F, SCENERY_KEY_ACTION_RAISE_AT_SELECTED, SCENERY_KEY_ACTION_RAISE_HEIGHT,{ trigger_use_scroll_height, trigger_override_keep_height },{ nullptr } },
+    { F, T, F,      A, A, F, SCENERY_KEY_ACTION_RAISE_AT_SELECTED, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ cont_set_elevation },{ cont_set_elevation } },
+    //{ F, T, F,      T, T, F, SCENERY_KEY_ACTION_RAISE_HEIGHT, SCENERY_KEY_ACTION_RAISE_HEIGHT,{ cont_set_elevation },{ cont_set_elevation } },
+    //single press of each key    
+    { T, F, F,      A, A, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_KEEP_HEIGHT,{ trigger_set_keep_height, /*trigger_set_origin_begin,*/ trigger_use_keep_height },{ nullptr } },//keep height
+    { F, T, F,      A, F, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_HEIGHT,{ trigger_set_keep_height, trigger_set_origin_begin, trigger_set_elevation },{ cont_set_elevation } },//raise by shift
+    { F, T, F,      A, T, A, SCENERY_KEY_ACTION_RAISE_HEIGHT, SCENERY_KEY_ACTION_RAISE_HEIGHT,{ cont_set_elevation },{ cont_set_elevation } },//raise by shift
+    //Ctrl + shift
+    { T, T, F,      T, F, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ trigger_set_elevation, trigger_use_keep_height },{ nullptr } },//raise by shift at position
+    //continous shift with saved height
+    { T, T, F,      A, A, A, SCENERY_KEY_ACTION_RAISE_AT_SELECTED, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ cont_set_elevation },{ cont_set_elevation } },//raise by shift at position
+    //if shift was clicked first use that height and keep scrolling
+    { T, T, F,      A, A, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_AT_SELECTED,{ trigger_use_keep_height },{ cont_set_elevation } },
+
     //ALT
-    { F, F, T,      F, F, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG,{ trigger_set_drag_begin, trigger_set_drag_height },{ nullptr } },//drag
+    //releases from A) and B): alt is released
+    { F, T, F,      F, T, T, SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT, SCENERY_KEY_ACTION_RAISE_HEIGHT,{ trigger_use_scroll_height, trigger_use_origin_coords_for_scroll }, nullptr },
+    { F, T, F,      F, T, T, SCENERY_KEY_ACTION_RAISE_ADD_DRAG, SCENERY_KEY_ACTION_RAISE_HEIGHT,{ trigger_use_scroll_height, trigger_use_origin_coords_for_scroll },{ nullptr } },
+    //releases from A) and B): shift is released
+    { F, F, T,      F, T, T, SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_scroll_height }, nullptr },
+    { F, F, T,      F, T, T, SCENERY_KEY_ACTION_RAISE_ADD_DRAG, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_scroll_height },{ nullptr } },
+    //keeper for releases
+    { F, F, T,      F, F, T, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ nullptr },{ nullptr } },
+    //main states
+    { F, F, T,      F, F, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG,{ trigger_set_origin_begin, trigger_set_drag_height },{ nullptr } },//drag
     { F, F, T,      F, T, A, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG,{ trigger_set_drag_height },{ nullptr } },//drag
-    //A) ALT and SHIFT (alt clicked first) - area is defined, raide or lower it;
+    //A) ALT and SHIFT (alt clicked first) - area is defined, raise or lower it;
     { F, T, T,      F, F, T, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT,{ trigger_set_elevation,  trigger_use_drag_height }, nullptr },//drag during shift press (up down)
     //B) ALT and SHIFT (shift clicked first) - height is defined, set the area
-    { F, T, T,      F, T, F, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_ADD_DRAG, { trigger_use_keep_scroll_height, cont_lock_elevation},{ nullptr } },//drag during shift press (up down)
+    { F, T, T,      F, T, F, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_RAISE_ADD_DRAG, { trigger_use_scroll_height, cont_lock_elevation},{ nullptr } },//drag during shift press (up down)
+    
+
     //both keys are pressed - keeper function for A); ignore all ctrl presses in that state
     { A, T, T,      A, T, T, SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT, SCENERY_KEY_ACTION_DRAG_APPEND_HEIGHT,{ nullptr },{ cont_set_elevation } },
     //both keys are pressed - keeper function for B); ignore all ctrl presses in that state
     { A, T, T,      A, T, T, SCENERY_KEY_ACTION_RAISE_ADD_DRAG, SCENERY_KEY_ACTION_RAISE_ADD_DRAG,{ nullptr },{ cont_lock_elevation } },
     //ALT and CTRL
-    { T, F, T,      T, A, F, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_keep_height },{ nullptr } },//drag after ctrl press
+    { T, F, T,      T, A, F, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_set_origin_begin, trigger_use_keep_height },{ nullptr } },//alt after ctrl press
     { T, F, T,      F, A, T, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_drag_height },{ nullptr } },//ctrl during drag
     { T, F, T,      F, A, F, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_drag_height },{ nullptr } },//at the same time
     { T, F, T,      T, F, T, SCENERY_KEY_ACTION_ANY, SCENERY_KEY_ACTION_DRAG_KEEP_HEIGHT,{ trigger_use_drag_height },{ nullptr } },//at the same time
+
+
+
+
     //triple press - only 2 combos have sense: CTRL + ALT + SHIFT or CTRL + SHIFT + ALT
 
 
